@@ -91,9 +91,11 @@
   <!-- Auth screen -->
   <div id="auth-screen" class="auth">
     <h1>Baby Log</h1>
-    <p>Sign in with your email</p>
+    <p>Sign in to continue</p>
     <input type="email" id="email-input" placeholder="your@email.com" autocomplete="email">
-    <button class="submit-btn" id="magic-btn" onclick="sendMagicLink()">Send Magic Link</button>
+    <input type="password" id="password-input" placeholder="Password (if set)" autocomplete="current-password" style="width:100%;padding:14px;border:1.5px solid #e5e5ea;border-radius:12px;font-size:16px;margin-bottom:12px;display:block;">
+    <button class="submit-btn" id="signin-btn" onclick="signInWithPassword()" style="margin-bottom:10px;">Sign In</button>
+    <button class="submit-btn" id="magic-btn" onclick="sendMagicLink()" style="background:#f2f2f7;color:#007aff;">Send Magic Link</button>
     <p id="auth-msg" style="margin-top:14px;color:#6e6e73;font-size:14px;"></p>
   </div>
 
@@ -220,6 +222,17 @@
         if (session) showApp(session.user);
         else         showAuth();
       });
+    }
+
+    async function signInWithPassword() {
+      const email    = document.getElementById('email-input').value.trim();
+      const password = document.getElementById('password-input').value;
+      if (!email || !password) { document.getElementById('auth-msg').textContent = 'Enter email and password.'; return; }
+      const btn = document.getElementById('signin-btn');
+      btn.disabled = true; btn.textContent = 'Signing in…';
+      const { error } = await sb.auth.signInWithPassword({ email, password });
+      if (error) document.getElementById('auth-msg').textContent = '⚠ ' + error.message;
+      btn.disabled = false; btn.textContent = 'Sign In';
     }
 
     async function sendMagicLink() {
