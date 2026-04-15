@@ -77,11 +77,22 @@
     /* Recent */
     .recent { margin-top: 28px; padding-bottom: 40px; }
     .recent h2 { font-size: 12px; font-weight: 700; color: #6e6e73; text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 10px; }
-    .log-item { background: white; border-radius: 10px; padding: 12px 14px; margin-bottom: 8px; }
+    .log-item { background: white; border-radius: 10px; padding: 12px 14px; margin-bottom: 8px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
+    .log-item:active { background: #f5f5f7; }
+    .log-item .log-body { flex: 1; }
     .log-item .log-type { font-size: 14px; font-weight: 600; color: #007aff; }
     .log-item .log-time { color: #aeaeb2; font-size: 12px; margin-top: 2px; }
     .log-item .log-detail { color: #3a3a3c; font-size: 13px; margin-top: 3px; }
+    .log-item .edit-arrow { color: #c7c7cc; font-size: 16px; padding-left: 8px; }
     .no-logs { color: #aeaeb2; font-size: 14px; text-align: center; padding: 20px 0; }
+
+    /* Edit modal */
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 200; display: flex; align-items: flex-end; }
+    .modal { background: white; border-radius: 20px 20px 0 0; padding: 20px 16px 36px; width: 100%; max-height: 90vh; overflow-y: auto; }
+    .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; }
+    .modal-header h2 { font-size: 18px; font-weight: 700; }
+    .modal-close { font-size: 15px; color: #007aff; background: none; border: none; cursor: pointer; padding: 4px; }
+    .delete-btn { width: 100%; padding: 15px; background: white; color: #ff3b30; border: 1.5px solid #ff3b30; border-radius: 12px; font-size: 16px; font-weight: 600; cursor: pointer; margin-top: 10px; font-family: inherit; }
 
     /* Chart card */
     .chart-card { background: white; border-radius: 14px; padding: 14px 16px 16px; margin-bottom: 20px; }
@@ -227,6 +238,60 @@
     <div class="recent">
       <h2>Recent</h2>
       <div id="recent-list"><p class="no-logs">Loading…</p></div>
+    </div>
+  </div>
+
+  <!-- Edit modal -->
+  <div class="modal-overlay hidden" id="edit-modal" onclick="closeEditModal(event)">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>Edit Entry</h2>
+        <button class="modal-close" onclick="closeModal()">Cancel</button>
+      </div>
+
+      <!-- Edit type selector -->
+      <div class="type-row" style="margin-bottom:16px">
+        <button class="type-btn" onclick="setEditType('feed')"   id="edit-btn-feed">🍼<br>Feed</button>
+        <button class="type-btn" onclick="setEditType('diaper')" id="edit-btn-diaper">🚼<br>Diaper</button>
+        <button class="type-btn" onclick="setEditType('soothe')" id="edit-btn-soothe">🤗<br>Soothe</button>
+      </div>
+
+      <div id="edit-feed-fields">
+        <div class="field">
+          <label>What was given</label>
+          <div class="check-row">
+            <div class="check-item" id="edit-check-formula" onclick="toggleEditCheck('formula')">
+              <input type="checkbox" id="edit-cb-formula"><span>Formula</span>
+            </div>
+            <div class="check-item" id="edit-check-solid" onclick="toggleEditCheck('solid')">
+              <input type="checkbox" id="edit-cb-solid"><span>Solid</span>
+            </div>
+          </div>
+        </div>
+        <div class="amount-row">
+          <div class="field" id="edit-field-ml"><label>Formula (ml)</label><input type="number" id="edit-amount-ml" min="0" max="500"></div>
+          <div class="field" id="edit-field-g"><label>Solid (g)</label><input type="number" id="edit-amount-g" min="0" max="500"></div>
+        </div>
+      </div>
+
+      <div id="edit-diaper-fields" class="hidden">
+        <div class="field">
+          <label>Type</label>
+          <div class="radio-row">
+            <div class="radio-item" id="edit-radio-wet"   onclick="setEditDiaper('wet')">Wet</div>
+            <div class="radio-item" id="edit-radio-dirty" onclick="setEditDiaper('dirty')">Dirty</div>
+            <div class="radio-item" id="edit-radio-both"  onclick="setEditDiaper('both')">Both</div>
+          </div>
+        </div>
+      </div>
+
+      <div id="edit-soothe-fields" class="hidden"></div>
+
+      <div class="field"><label>Time</label><input type="datetime-local" id="edit-logged-at"></div>
+      <div class="field"><label>Notes (optional)</label><textarea id="edit-notes" rows="2" style="resize:none;"></textarea></div>
+
+      <button class="submit-btn" id="edit-save-btn" onclick="saveEdit()">Save Changes</button>
+      <button class="delete-btn" id="edit-delete-btn" onclick="deleteEntry()">Delete Entry</button>
     </div>
   </div>
 
@@ -473,11 +538,15 @@
           detail = sub.charAt(0).toUpperCase() + sub.slice(1);
         }
         if (r.notes) detail += (detail ? ' · ' : '') + r.notes;
+        const rowJson = encodeURIComponent(JSON.stringify(r));
         return `
-          <div class="log-item">
-            <div class="log-type">${typeLabel(r.type)}</div>
-            <div class="log-time">${time}</div>
-            ${detail ? `<div class="log-detail">${detail}</div>` : ''}
+          <div class="log-item" onclick="openEditModal(JSON.parse(decodeURIComponent('${rowJson}')))">
+            <div class="log-body">
+              <div class="log-type">${typeLabel(r.type)}</div>
+              <div class="log-time">${time}</div>
+              ${detail ? `<div class="log-detail">${detail}</div>` : ''}
+            </div>
+            <div class="edit-arrow">›</div>
           </div>`;
       }).join('');
     }
@@ -591,6 +660,116 @@
           }
         }
       });
+    }
+
+    // ── Edit modal ────────────────────────────────────────────────────────────
+
+    let editingId   = null;
+    let editDiaper  = 'wet';
+    let editType    = 'feed';
+
+    function openEditModal(row) {
+      editingId = row.id;
+
+      // Set type
+      const baseType = row.type.startsWith('diaper') ? 'diaper' : row.type;
+      setEditType(baseType);
+
+      // Pre-fill feed
+      if (baseType === 'feed') {
+        const hasFormula = row.had_formula;
+        const hasSolid   = row.had_solid;
+        document.getElementById('edit-cb-formula').checked = hasFormula;
+        document.getElementById('edit-cb-solid').checked   = hasSolid;
+        document.getElementById('edit-check-formula').classList.toggle('checked', hasFormula);
+        document.getElementById('edit-check-solid').classList.toggle('checked', hasSolid);
+        document.getElementById('edit-amount-ml').value = row.amount_ml || '';
+        document.getElementById('edit-amount-g').value  = row.amount_g  || '';
+        document.getElementById('edit-field-ml').classList.toggle('hidden', !hasFormula);
+        document.getElementById('edit-field-g').classList.toggle('hidden', !hasSolid);
+      }
+
+      // Pre-fill diaper
+      if (baseType === 'diaper') {
+        const sub = row.type.replace('diaper_', '');
+        setEditDiaper(sub);
+      }
+
+      // Pre-fill time
+      const local = new Date(new Date(row.logged_at).getTime() - new Date().getTimezoneOffset() * 60000)
+        .toISOString().slice(0, 16);
+      document.getElementById('edit-logged-at').value = local;
+      document.getElementById('edit-notes').value = row.notes || '';
+
+      document.getElementById('edit-modal').classList.remove('hidden');
+    }
+
+    function closeModal() {
+      document.getElementById('edit-modal').classList.add('hidden');
+      editingId = null;
+    }
+
+    function closeEditModal(e) {
+      if (e.target === document.getElementById('edit-modal')) closeModal();
+    }
+
+    function setEditType(type) {
+      editType = type;
+      ['feed', 'diaper', 'soothe'].forEach(t => {
+        document.getElementById(`edit-btn-${t}`).classList.toggle('active', t === type);
+        document.getElementById(`edit-${t}-fields`).classList.toggle('hidden', t !== type);
+      });
+    }
+
+    function setEditDiaper(type) {
+      editDiaper = type;
+      ['wet', 'dirty', 'both'].forEach(t =>
+        document.getElementById(`edit-radio-${t}`).classList.toggle('selected', t === type)
+      );
+    }
+
+    function toggleEditCheck(which) {
+      const cb = document.getElementById(`edit-cb-${which}`);
+      cb.checked = !cb.checked;
+      document.getElementById(`edit-check-${which}`).classList.toggle('checked', cb.checked);
+      document.getElementById('edit-field-ml').classList.toggle('hidden', !document.getElementById('edit-cb-formula').checked);
+      document.getElementById('edit-field-g').classList.toggle('hidden',  !document.getElementById('edit-cb-solid').checked);
+    }
+
+    async function saveEdit() {
+      const btn = document.getElementById('edit-save-btn');
+      btn.disabled = true; btn.textContent = 'Saving…';
+
+      const loggedAt = document.getElementById('edit-logged-at').value;
+      const notes    = document.getElementById('edit-notes').value.trim() || null;
+      let updates = { logged_at: new Date(loggedAt).toISOString(), notes };
+
+      if (editType === 'feed') {
+        const hadFormula = document.getElementById('edit-cb-formula').checked;
+        const hadSolid   = document.getElementById('edit-cb-solid').checked;
+        if (!hadFormula && !hadSolid) { showToast('Select formula or solid'); btn.disabled = false; btn.textContent = 'Save Changes'; return; }
+        Object.assign(updates, {
+          type: 'feed', had_formula: hadFormula, had_solid: hadSolid,
+          amount_ml: hadFormula ? (parseInt(document.getElementById('edit-amount-ml').value) || null) : null,
+          amount_g:  hadSolid   ? (parseInt(document.getElementById('edit-amount-g').value)  || null) : null,
+        });
+      } else if (editType === 'diaper') {
+        Object.assign(updates, { type: `diaper_${editDiaper}`, had_formula: false, had_solid: false, amount_ml: null, amount_g: null });
+      } else {
+        Object.assign(updates, { type: 'soothe', had_formula: false, had_solid: false, amount_ml: null, amount_g: null });
+      }
+
+      const { error } = await sb.from('care_logs').update(updates).eq('id', editingId);
+      if (error) { showToast('Error: ' + error.message); }
+      else { closeModal(); showToast('Updated'); loadStats(); loadChart(); loadRecent(); }
+      btn.disabled = false; btn.textContent = 'Save Changes';
+    }
+
+    async function deleteEntry() {
+      if (!confirm('Delete this entry?')) return;
+      const { error } = await sb.from('care_logs').delete().eq('id', editingId);
+      if (error) { showToast('Error: ' + error.message); }
+      else { closeModal(); showToast('Deleted'); loadStats(); loadChart(); loadRecent(); }
     }
 
     // ── Toast ─────────────────────────────────────────────────────────────────
