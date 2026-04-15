@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>Baby Log</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: #f5f5f7; color: #1c1c1e; }
+
+    .container { max-width: 480px; margin: 0 auto; padding: 16px; }
+
+    /* Auth */
+    .auth { max-width: 480px; margin: 0 auto; padding: 60px 24px; text-align: center; }
+    .auth h1 { font-size: 28px; font-weight: 700; margin-bottom: 8px; }
+    .auth p { color: #6e6e73; margin-bottom: 28px; font-size: 15px; }
+    .auth input { width: 100%; padding: 14px; border: 1.5px solid #e5e5ea; border-radius: 12px; font-size: 16px; margin-bottom: 12px; }
+    .auth input:focus { outline: none; border-color: #007aff; }
+
+    /* Top bar */
+    .top-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-top: 8px; }
+    .top-bar h1 { font-size: 24px; font-weight: 700; }
+    .logout-btn { font-size: 14px; color: #007aff; background: none; border: none; cursor: pointer; padding: 4px; }
+
+    /* Type selector */
+    .type-row { display: flex; gap: 8px; margin-bottom: 20px; }
+    .type-btn { flex: 1; padding: 14px 6px; border: 2px solid #e5e5ea; border-radius: 12px; background: white; font-size: 13px; font-weight: 600; cursor: pointer; text-align: center; line-height: 1.4; }
+    .type-btn.active { border-color: #007aff; background: #eef4ff; color: #007aff; }
+
+    /* Fields */
+    .field { margin-bottom: 16px; }
+    label { display: block; font-size: 12px; font-weight: 700; color: #6e6e73; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.6px; }
+    input[type=number], input[type=datetime-local], textarea {
+      width: 100%; padding: 13px; border: 1.5px solid #e5e5ea; border-radius: 10px;
+      font-size: 16px; background: white; -webkit-appearance: none; font-family: inherit;
+    }
+    input:focus, textarea:focus { outline: none; border-color: #007aff; }
+
+    /* Checkboxes */
+    .check-row { display: flex; gap: 10px; }
+    .check-item { flex: 1; display: flex; align-items: center; gap: 10px; padding: 13px; border: 1.5px solid #e5e5ea; border-radius: 10px; background: white; cursor: pointer; user-select: none; }
+    .check-item.checked { border-color: #007aff; background: #eef4ff; }
+    .check-item input[type=checkbox] { width: 20px; height: 20px; accent-color: #007aff; flex-shrink: 0; pointer-events: none; }
+    .check-item span { font-size: 15px; font-weight: 500; }
+
+    /* Diaper radio */
+    .radio-row { display: flex; gap: 8px; }
+    .radio-item { flex: 1; padding: 13px 8px; border: 1.5px solid #e5e5ea; border-radius: 10px; background: white; text-align: center; cursor: pointer; font-size: 14px; font-weight: 500; user-select: none; }
+    .radio-item.selected { border-color: #007aff; background: #eef4ff; color: #007aff; }
+
+    /* Amount row */
+    .amount-row { display: flex; gap: 12px; }
+    .amount-row .field { flex: 1; }
+
+    /* Buttons */
+    .submit-btn { width: 100%; padding: 16px; background: #007aff; color: white; border: none; border-radius: 12px; font-size: 17px; font-weight: 600; cursor: pointer; margin-top: 4px; font-family: inherit; }
+    .submit-btn:active { background: #0051d5; }
+    .submit-btn:disabled { background: #aeaeb2; }
+
+    /* Toast */
+    .toast { position: fixed; bottom: 36px; left: 50%; transform: translateX(-50%); background: #1c1c1e; color: white; padding: 11px 22px; border-radius: 20px; font-size: 15px; opacity: 0; transition: opacity 0.25s; pointer-events: none; white-space: nowrap; z-index: 100; }
+    .toast.show { opacity: 1; }
+
+    /* Recent */
+    .recent { margin-top: 28px; padding-bottom: 40px; }
+    .recent h2 { font-size: 12px; font-weight: 700; color: #6e6e73; text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 10px; }
+    .log-item { background: white; border-radius: 10px; padding: 12px 14px; margin-bottom: 8px; }
+    .log-item .log-type { font-size: 14px; font-weight: 600; color: #007aff; }
+    .log-item .log-time { color: #aeaeb2; font-size: 12px; margin-top: 2px; }
+    .log-item .log-detail { color: #3a3a3c; font-size: 13px; margin-top: 3px; }
+    .no-logs { color: #aeaeb2; font-size: 14px; text-align: center; padding: 20px 0; }
+
+    .hidden { display: none !important; }
+    .error-msg { color: #ff3b30; font-size: 13px; margin-top: 8px; }
+  </style>
+</head>
+<body>
+
+  <!-- Auth screen -->
+  <div id="auth-screen" class="auth">
+    <h1>Baby Log</h1>
+    <p>Sign in with your email</p>
+    <input type="email" id="email-input" placeholder="your@email.com" autocomplete="email">
+    <button class="submit-btn" id="magic-btn" onclick="sendMagicLink()">Send Magic Link</button>
+    <p id="auth-msg" style="margin-top:14px;color:#6e6e73;font-size:14px;"></p>
+  </div>
+
+  <!-- Main app -->
+  <div id="app-screen" class="container hidden">
+    <div class="top-bar">
+      <h1>Baby Log</h1>
+      <button class="logout-btn" onclick="logout()">Sign out</button>
+    </div>
+
+    <!-- Type buttons -->
+    <div class="type-row">
+      <button class="type-btn active" onclick="setType('feed')"   id="btn-feed">🍼<br>Feed</button>
+      <button class="type-btn"        onclick="setType('diaper')" id="btn-diaper">👶<br>Diaper</button>
+      <button class="type-btn"        onclick="setType('soothe')" id="btn-soothe">🤗<br>Soothe</button>
+    </div>
+
+    <!-- Feed fields -->
+    <div id="feed-fields">
+      <div class="field">
+        <label>What was given</label>
+        <div class="check-row">
+          <div class="check-item" id="check-formula" onclick="toggleCheck('formula')">
+            <input type="checkbox" id="cb-formula">
+            <span>Formula</span>
+          </div>
+          <div class="check-item" id="check-solid" onclick="toggleCheck('solid')">
+            <input type="checkbox" id="cb-solid">
+            <span>Solid</span>
+          </div>
+        </div>
+      </div>
+      <div class="amount-row">
+        <div class="field" id="field-ml">
+          <label>Formula (ml)</label>
+          <input type="number" id="amount-ml" placeholder="120" min="0" max="500">
+        </div>
+        <div class="field" id="field-g">
+          <label>Solid (g)</label>
+          <input type="number" id="amount-g" placeholder="30" min="0" max="500">
+        </div>
+      </div>
+    </div>
+
+    <!-- Diaper fields -->
+    <div id="diaper-fields" class="hidden">
+      <div class="field">
+        <label>Type</label>
+        <div class="radio-row">
+          <div class="radio-item selected" id="radio-wet"   onclick="setDiaper('wet')">Wet</div>
+          <div class="radio-item"          id="radio-dirty" onclick="setDiaper('dirty')">Dirty</div>
+          <div class="radio-item"          id="radio-both"  onclick="setDiaper('both')">Both</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Soothe fields (notes only — shared below) -->
+    <div id="soothe-fields" class="hidden"></div>
+
+    <!-- Shared fields -->
+    <div class="field">
+      <label>Time</label>
+      <input type="datetime-local" id="logged-at">
+    </div>
+    <div class="field">
+      <label>Notes (optional)</label>
+      <textarea id="notes" rows="2" placeholder="e.g. refused last 20ml, seemed gassy" style="resize:none;"></textarea>
+    </div>
+
+    <button class="submit-btn" id="submit-btn" onclick="submitLog()">Save</button>
+
+    <!-- Recent entries -->
+    <div class="recent">
+      <h2>Recent</h2>
+      <div id="recent-list"><p class="no-logs">Loading…</p></div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    const SUPABASE_URL = 'https://nxggytczmjaextwxrfrq.supabase.co';
+    const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im54Z2d5dGN6bWphZXh0d3hyZnJxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxODMzMTIsImV4cCI6MjA5MTc1OTMxMn0.gZSZqPxs7sJGa8f6nIap8QVD3cIpoUojjVmXfjvl4R4';
+    const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    let currentType = 'feed';
+    let diaperType  = 'wet';
+    let currentUser = null;
+
+    // ── Auth ──────────────────────────────────────────────────────────────────
+
+    async function init() {
+      const { data: { session } } = await sb.auth.getSession();
+      if (session) showApp(session.user);
+
+      sb.auth.onAuthStateChange((_, session) => {
+        if (session) showApp(session.user);
+        else         showAuth();
+      });
+    }
+
+    async function sendMagicLink() {
+      const email = document.getElementById('email-input').value.trim();
+      if (!email) return;
+      const btn = document.getElementById('magic-btn');
+      btn.disabled = true; btn.textContent = 'Sending…';
+      const { error } = await sb.auth.signInWithOtp({
+        email,
+        options: { shouldCreateUser: true }
+      });
+      document.getElementById('auth-msg').textContent = error
+        ? '⚠ ' + error.message
+        : '✓ Check your email for the magic link.';
+      btn.disabled = false; btn.textContent = 'Send Magic Link';
+    }
+
+    async function logout() {
+      await sb.auth.signOut();
+    }
+
+    function showApp(user) {
+      currentUser = user;
+      document.getElementById('auth-screen').classList.add('hidden');
+      document.getElementById('app-screen').classList.remove('hidden');
+      setDefaultTime();
+      loadRecent();
+    }
+
+    function showAuth() {
+      currentUser = null;
+      document.getElementById('app-screen').classList.add('hidden');
+      document.getElementById('auth-screen').classList.remove('hidden');
+    }
+
+    // ── Type switching ────────────────────────────────────────────────────────
+
+    function setType(type) {
+      currentType = type;
+      ['feed', 'diaper', 'soothe'].forEach(t => {
+        document.getElementById(`btn-${t}`).classList.toggle('active', t === type);
+        document.getElementById(`${t}-fields`).classList.toggle('hidden', t !== type);
+      });
+    }
+
+    function setDiaper(type) {
+      diaperType = type;
+      ['wet', 'dirty', 'both'].forEach(t =>
+        document.getElementById(`radio-${t}`).classList.toggle('selected', t === type)
+      );
+    }
+
+    function toggleCheck(which) {
+      const cb = document.getElementById(`cb-${which}`);
+      cb.checked = !cb.checked;
+      document.getElementById(`check-${which}`).classList.toggle('checked', cb.checked);
+      // Show/hide amount inputs based on checked state
+      document.getElementById('field-ml').classList.toggle('hidden', !document.getElementById('cb-formula').checked);
+      document.getElementById('field-g').classList.toggle('hidden',  !document.getElementById('cb-solid').checked);
+    }
+
+    // ── Time ──────────────────────────────────────────────────────────────────
+
+    function setDefaultTime() {
+      const now = new Date();
+      now.setSeconds(0, 0);
+      const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000)
+        .toISOString().slice(0, 16);
+      document.getElementById('logged-at').value = local;
+    }
+
+    // ── Submit ────────────────────────────────────────────────────────────────
+
+    async function submitLog() {
+      const btn = document.getElementById('submit-btn');
+      btn.disabled = true; btn.textContent = 'Saving…';
+
+      const loggedAtVal = document.getElementById('logged-at').value;
+      const notes = document.getElementById('notes').value.trim() || null;
+
+      let row = {
+        user_id:    currentUser.id,
+        logged_at:  new Date(loggedAtVal).toISOString(),
+        had_formula: false,
+        had_solid:   false,
+        notes,
+      };
+
+      if (currentType === 'feed') {
+        const hadFormula = document.getElementById('cb-formula').checked;
+        const hadSolid   = document.getElementById('cb-solid').checked;
+        if (!hadFormula && !hadSolid) {
+          showToast('Select formula or solid'); btn.disabled = false; btn.textContent = 'Save'; return;
+        }
+        Object.assign(row, {
+          type:        'feed',
+          had_formula: hadFormula,
+          had_solid:   hadSolid,
+          amount_ml:   hadFormula ? (parseInt(document.getElementById('amount-ml').value) || null) : null,
+          amount_g:    hadSolid   ? (parseInt(document.getElementById('amount-g').value)  || null) : null,
+        });
+      } else if (currentType === 'diaper') {
+        row.type = `diaper_${diaperType}`;
+      } else {
+        row.type = 'soothe';
+      }
+
+      const { error } = await sb.from('care_logs').insert(row);
+      if (error) {
+        showToast('Error: ' + error.message);
+      } else {
+        showToast('Saved');
+        resetForm();
+        loadRecent();
+      }
+      btn.disabled = false; btn.textContent = 'Save';
+    }
+
+    function resetForm() {
+      document.getElementById('notes').value = '';
+      document.getElementById('amount-ml').value = '';
+      document.getElementById('amount-g').value = '';
+      ['formula', 'solid'].forEach(w => {
+        document.getElementById(`cb-${w}`).checked = false;
+        document.getElementById(`check-${w}`).classList.remove('checked');
+      });
+      document.getElementById('field-ml').classList.remove('hidden');
+      document.getElementById('field-g').classList.remove('hidden');
+      setDiaper('wet');
+      setDefaultTime();
+    }
+
+    // ── Recent logs ───────────────────────────────────────────────────────────
+
+    async function loadRecent() {
+      const { data } = await sb.from('care_logs')
+        .select('*')
+        .order('logged_at', { ascending: false })
+        .limit(5);
+
+      const list = document.getElementById('recent-list');
+      if (!data || data.length === 0) {
+        list.innerHTML = '<p class="no-logs">No entries yet</p>'; return;
+      }
+      list.innerHTML = data.map(r => {
+        const time = new Date(r.logged_at).toLocaleString([], {
+          month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+        });
+        let detail = '';
+        if (r.type === 'feed') {
+          const parts = [];
+          if (r.had_formula) parts.push('Formula' + (r.amount_ml ? ' ' + r.amount_ml + 'ml' : ''));
+          if (r.had_solid)   parts.push('Solid'   + (r.amount_g  ? ' ' + r.amount_g  + 'g'  : ''));
+          detail = parts.join(' + ');
+        } else if (r.type.startsWith('diaper')) {
+          const sub = r.type.replace('diaper_', '');
+          detail = sub.charAt(0).toUpperCase() + sub.slice(1);
+        }
+        if (r.notes) detail += (detail ? ' · ' : '') + r.notes;
+        return `
+          <div class="log-item">
+            <div class="log-type">${typeLabel(r.type)}</div>
+            <div class="log-time">${time}</div>
+            ${detail ? `<div class="log-detail">${detail}</div>` : ''}
+          </div>`;
+      }).join('');
+    }
+
+    const TYPE_LABELS = {
+      feed: '🍼 Feed', diaper_wet: '👶 Wet', diaper_dirty: '👶 Dirty',
+      diaper_both: '👶 Wet + Dirty', soothe: '🤗 Soothe'
+    };
+    const typeLabel = t => TYPE_LABELS[t] || t;
+
+    // ── Toast ─────────────────────────────────────────────────────────────────
+
+    function showToast(msg) {
+      const t = document.getElementById('toast');
+      t.textContent = msg;
+      t.classList.add('show');
+      setTimeout(() => t.classList.remove('show'), 2200);
+    }
+
+    init();
+  </script>
+</body>
+</html>
