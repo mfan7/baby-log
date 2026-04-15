@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
   <title>Baby Log</title>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: #f5f5f7; color: #1c1c1e; }
@@ -82,6 +83,17 @@
     .log-item .log-detail { color: #3a3a3c; font-size: 13px; margin-top: 3px; }
     .no-logs { color: #aeaeb2; font-size: 14px; text-align: center; padding: 20px 0; }
 
+    /* Chart card */
+    .chart-card { background: white; border-radius: 14px; padding: 14px 16px 16px; margin-bottom: 20px; }
+    .chart-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+    .chart-title { font-size: 11px; font-weight: 700; color: #aeaeb2; text-transform: uppercase; letter-spacing: 0.6px; }
+    .chart-toggle { display: flex; gap: 0; border: 1.5px solid #e5e5ea; border-radius: 8px; overflow: hidden; }
+    .chart-toggle button { padding: 5px 12px; border: none; background: white; font-size: 12px; font-weight: 600; color: #6e6e73; cursor: pointer; }
+    .chart-toggle button.active { background: #007aff; color: white; }
+    .chart-legend { display: flex; gap: 14px; margin-bottom: 10px; }
+    .legend-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: #6e6e73; }
+    .legend-dot { width: 10px; height: 10px; border-radius: 3px; }
+
     .hidden { display: none !important; }
     .error-msg { color: #ff3b30; font-size: 13px; margin-top: 8px; }
   </style>
@@ -118,7 +130,7 @@
           <div class="stat-sub" id="stat-feed-last"></div>
         </div>
         <div class="stat-col">
-          <div class="stat-icon">👶</div>
+          <div class="stat-icon">🚼</div>
           <div class="stat-value" id="stat-diapers">—</div>
           <div class="stat-label">diapers</div>
           <div class="stat-sub" id="stat-diaper-detail"></div>
@@ -133,10 +145,27 @@
       </div>
     </div>
 
+    <!-- Feeding chart -->
+    <div class="chart-card">
+      <div class="chart-header">
+        <span class="chart-title">Feeding Trends</span>
+        <div class="chart-toggle">
+          <button id="toggle-week" class="active" onclick="setChartMode('week')">This Week</button>
+          <button id="toggle-byweek" onclick="setChartMode('byweek')">By Week</button>
+        </div>
+      </div>
+      <div class="chart-legend">
+        <div class="legend-item"><div class="legend-dot" style="background:#4a9eff"></div>Formula (ml)</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#34c759"></div>Solid (g)</div>
+      </div>
+      <canvas id="feed-chart" height="160"></canvas>
+      <p id="chart-empty" style="text-align:center;color:#aeaeb2;font-size:13px;padding:20px 0;display:none;">No feeding data yet</p>
+    </div>
+
     <!-- Type buttons -->
     <div class="type-row">
       <button class="type-btn active" onclick="setType('feed')"   id="btn-feed">🍼<br>Feed</button>
-      <button class="type-btn"        onclick="setType('diaper')" id="btn-diaper">👶<br>Diaper</button>
+      <button class="type-btn"        onclick="setType('diaper')" id="btn-diaper">🚼<br>Diaper</button>
       <button class="type-btn"        onclick="setType('soothe')" id="btn-soothe">🤗<br>Soothe</button>
     </div>
 
@@ -260,6 +289,7 @@
       document.getElementById('app-screen').classList.remove('hidden');
       setDefaultTime();
       loadStats();
+      loadChart();
       loadRecent();
     }
 
@@ -348,6 +378,7 @@
         showToast('Saved');
         resetForm();
         loadStats();
+        loadChart();
         loadRecent();
       }
       btn.disabled = false; btn.textContent = 'Save';
@@ -452,10 +483,115 @@
     }
 
     const TYPE_LABELS = {
-      feed: '🍼 Feed', diaper_wet: '👶 Wet', diaper_dirty: '👶 Dirty',
-      diaper_both: '👶 Wet + Dirty', soothe: '🤗 Soothe'
+      feed: '🍼 Feed', diaper_wet: '🚼 Wet', diaper_dirty: '🚼 Dirty',
+      diaper_both: '🚼 Wet + Dirty', soothe: '🤗 Soothe'
     };
     const typeLabel = t => TYPE_LABELS[t] || t;
+
+    // ── Chart ─────────────────────────────────────────────────────────────────
+
+    let feedChart = null;
+    let chartMode = 'week'; // 'week' | 'byweek'
+
+    function setChartMode(mode) {
+      chartMode = mode;
+      document.getElementById('toggle-week').classList.toggle('active', mode === 'week');
+      document.getElementById('toggle-byweek').classList.toggle('active', mode === 'byweek');
+      loadChart();
+    }
+
+    function dateKey(d) {
+      return d.toISOString().slice(0, 10); // YYYY-MM-DD
+    }
+
+    function weekKey(d) {
+      // ISO week start (Monday)
+      const day = new Date(d);
+      day.setHours(0, 0, 0, 0);
+      day.setDate(day.getDate() - ((day.getDay() + 6) % 7));
+      return dateKey(day);
+    }
+
+    async function loadChart() {
+      // Fetch last 8 weeks of feed data
+      const since = new Date();
+      since.setDate(since.getDate() - 56);
+      const { data } = await sb.from('care_logs')
+        .select('logged_at, amount_ml, amount_g')
+        .eq('type', 'feed')
+        .gte('logged_at', since.toISOString())
+        .order('logged_at', { ascending: true });
+
+      if (!data || data.length === 0) {
+        document.getElementById('feed-chart').style.display = 'none';
+        document.getElementById('chart-empty').style.display = 'block';
+        return;
+      }
+      document.getElementById('feed-chart').style.display = 'block';
+      document.getElementById('chart-empty').style.display = 'none';
+
+      let labels, formulaVals, solidVals;
+
+      if (chartMode === 'week') {
+        // Last 7 days, one bar per day
+        const days = [];
+        for (let i = 6; i >= 0; i--) {
+          const d = new Date(); d.setDate(d.getDate() - i); d.setHours(0,0,0,0);
+          days.push(d);
+        }
+        labels      = days.map(d => d.toLocaleDateString([], { weekday: 'short', month: 'numeric', day: 'numeric' }));
+        formulaVals = days.map(d => 0);
+        solidVals   = days.map(d => 0);
+        data.forEach(r => {
+          const rDate = new Date(r.logged_at); rDate.setHours(0,0,0,0);
+          const idx = days.findIndex(d => d.getTime() === rDate.getTime());
+          if (idx >= 0) {
+            formulaVals[idx] += r.amount_ml || 0;
+            solidVals[idx]   += r.amount_g  || 0;
+          }
+        });
+      } else {
+        // By week: last 6 weeks, avg per day in each week
+        const weekMap = {}; // weekKey → { mlTotal, gTotal, days: Set }
+        data.forEach(r => {
+          const wk = weekKey(new Date(r.logged_at));
+          if (!weekMap[wk]) weekMap[wk] = { mlTotal: 0, gTotal: 0, days: new Set() };
+          weekMap[wk].mlTotal += r.amount_ml || 0;
+          weekMap[wk].gTotal  += r.amount_g  || 0;
+          weekMap[wk].days.add(dateKey(new Date(r.logged_at)));
+        });
+        const weeks = Object.keys(weekMap).sort().slice(-6);
+        labels      = weeks.map(wk => { const d = new Date(wk); return `W ${d.getMonth()+1}/${d.getDate()}`; });
+        formulaVals = weeks.map(wk => Math.round(weekMap[wk].mlTotal / weekMap[wk].days.size));
+        solidVals   = weeks.map(wk => Math.round(weekMap[wk].gTotal  / weekMap[wk].days.size));
+      }
+
+      const ctx = document.getElementById('feed-chart').getContext('2d');
+      if (feedChart) feedChart.destroy();
+      feedChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels,
+          datasets: [
+            { label: 'Formula (ml)', data: formulaVals, backgroundColor: '#4a9eff', borderRadius: 4, stack: 'feed' },
+            { label: 'Solid (g)',    data: solidVals,   backgroundColor: '#34c759', borderRadius: 4, stack: 'feed' },
+          ]
+        },
+        options: {
+          responsive: true,
+          plugins: { legend: { display: false }, tooltip: {
+            callbacks: {
+              label: ctx => ctx.dataset.label + ': ' + ctx.parsed.y + (ctx.datasetIndex === 0 ? 'ml' : 'g')
+            }
+          }},
+          scales: {
+            x: { stacked: true, grid: { display: false }, ticks: { font: { size: 11 }, maxRotation: 45 } },
+            y: { stacked: true, grid: { color: '#f2f2f7' }, ticks: { font: { size: 11 } },
+                 title: { display: true, text: 'ml / g', font: { size: 10 }, color: '#aeaeb2' } }
+          }
+        }
+      });
+    }
 
     // ── Toast ─────────────────────────────────────────────────────────────────
 
