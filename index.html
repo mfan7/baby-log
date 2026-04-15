@@ -148,10 +148,11 @@
           <div class="stat-sub" id="stat-diaper-last"></div>
         </div>
         <div class="stat-col">
-          <div class="stat-icon">🤗</div>
-          <div class="stat-value" id="stat-soothe">—</div>
-          <div class="stat-label">soothe</div>
-          <div class="stat-sub" id="stat-soothe-last"></div>
+          <div class="stat-icon">🎯</div>
+          <div class="stat-value" id="stat-activity">—</div>
+          <div class="stat-label">activities</div>
+          <div class="stat-sub" id="stat-activity-detail"></div>
+          <div class="stat-sub" id="stat-activity-last"></div>
         </div>
       </div>
     </div>
@@ -182,9 +183,9 @@
 
     <!-- Type buttons -->
     <div class="type-row">
-      <button class="type-btn active" onclick="setType('feed')"   id="btn-feed">🍼<br>Feed</button>
-      <button class="type-btn"        onclick="setType('diaper')" id="btn-diaper">🚼<br>Diaper</button>
-      <button class="type-btn"        onclick="setType('soothe')" id="btn-soothe">🤗<br>Soothe</button>
+      <button class="type-btn active" onclick="setType('feed')"     id="btn-feed">🍼<br>Feed</button>
+      <button class="type-btn"        onclick="setType('diaper')"   id="btn-diaper">🚼<br>Diaper</button>
+      <button class="type-btn"        onclick="setType('activity')" id="btn-activity">🎯<br>Activity</button>
     </div>
 
     <!-- Feed fields -->
@@ -226,8 +227,23 @@
       </div>
     </div>
 
-    <!-- Soothe fields (notes only — shared below) -->
-    <div id="soothe-fields" class="hidden"></div>
+    <!-- Activity fields -->
+    <div id="activity-fields" class="hidden">
+      <div class="field">
+        <label>Activity type</label>
+        <div class="radio-row" style="flex-wrap:wrap;gap:8px;">
+          <div class="radio-item selected" id="act-play"     onclick="setActivity('play')"     style="flex:1 1 calc(33% - 8px)">🧸 Play</div>
+          <div class="radio-item"          id="act-study"    onclick="setActivity('study')"    style="flex:1 1 calc(33% - 8px)">📚 Study</div>
+          <div class="radio-item"          id="act-soothe"   onclick="setActivity('soothe')"   style="flex:1 1 calc(33% - 8px)">🤗 Soothe</div>
+          <div class="radio-item"          id="act-exercise" onclick="setActivity('exercise')" style="flex:1 1 calc(33% - 8px)">🏃 Exercise</div>
+          <div class="radio-item"          id="act-other"    onclick="setActivity('other')"    style="flex:1 1 calc(33% - 8px)">✏️ Other</div>
+        </div>
+      </div>
+      <div class="field" id="other-label-field" style="display:none;">
+        <label>Custom label</label>
+        <input type="text" id="other-label" placeholder="e.g. bath, massage…" style="width:100%;padding:13px;border:1.5px solid #e5e5ea;border-radius:10px;font-size:16px;">
+      </div>
+    </div>
 
     <!-- Shared fields -->
     <div class="field">
@@ -258,9 +274,9 @@
 
       <!-- Edit type selector -->
       <div class="type-row" style="margin-bottom:16px">
-        <button class="type-btn" onclick="setEditType('feed')"   id="edit-btn-feed">🍼<br>Feed</button>
-        <button class="type-btn" onclick="setEditType('diaper')" id="edit-btn-diaper">🚼<br>Diaper</button>
-        <button class="type-btn" onclick="setEditType('soothe')" id="edit-btn-soothe">🤗<br>Soothe</button>
+        <button class="type-btn" onclick="setEditType('feed')"     id="edit-btn-feed">🍼<br>Feed</button>
+        <button class="type-btn" onclick="setEditType('diaper')"   id="edit-btn-diaper">🚼<br>Diaper</button>
+        <button class="type-btn" onclick="setEditType('activity')" id="edit-btn-activity">🎯<br>Activity</button>
       </div>
 
       <div id="edit-feed-fields">
@@ -292,7 +308,18 @@
         </div>
       </div>
 
-      <div id="edit-soothe-fields" class="hidden"></div>
+      <div id="edit-activity-fields" class="hidden">
+        <div class="field">
+          <label>Activity type</label>
+          <div class="radio-row" style="flex-wrap:wrap;gap:8px;">
+            <div class="radio-item" id="edit-act-play"     onclick="setEditActivity('play')"     style="flex:1 1 calc(33% - 8px)">🧸 Play</div>
+            <div class="radio-item" id="edit-act-study"    onclick="setEditActivity('study')"    style="flex:1 1 calc(33% - 8px)">📚 Study</div>
+            <div class="radio-item" id="edit-act-soothe"   onclick="setEditActivity('soothe')"   style="flex:1 1 calc(33% - 8px)">🤗 Soothe</div>
+            <div class="radio-item" id="edit-act-exercise" onclick="setEditActivity('exercise')" style="flex:1 1 calc(33% - 8px)">🏃 Exercise</div>
+            <div class="radio-item" id="edit-act-other"    onclick="setEditActivity('other')"    style="flex:1 1 calc(33% - 8px)">✏️ Other</div>
+          </div>
+        </div>
+      </div>
 
       <div class="field"><label>Time</label><input type="datetime-local" id="edit-logged-at"></div>
       <div class="field"><label>Notes (optional)</label><textarea id="edit-notes" rows="2" style="resize:none;"></textarea></div>
@@ -309,9 +336,10 @@
     const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im54Z2d5dGN6bWphZXh0d3hyZnJxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxODMzMTIsImV4cCI6MjA5MTc1OTMxMn0.gZSZqPxs7sJGa8f6nIap8QVD3cIpoUojjVmXfjvl4R4';
     const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-    let currentType = 'feed';
-    let diaperType  = 'wet';
-    let currentUser = null;
+    let currentType    = 'feed';
+    let diaperType     = 'wet';
+    let activitySubtype = 'play';
+    let currentUser    = null;
 
     // ── Auth ──────────────────────────────────────────────────────────────────
 
@@ -375,10 +403,18 @@
 
     function setType(type) {
       currentType = type;
-      ['feed', 'diaper', 'soothe'].forEach(t => {
+      ['feed', 'diaper', 'activity'].forEach(t => {
         document.getElementById(`btn-${t}`).classList.toggle('active', t === type);
         document.getElementById(`${t}-fields`).classList.toggle('hidden', t !== type);
       });
+    }
+
+    function setActivity(sub) {
+      activitySubtype = sub;
+      ['play', 'study', 'soothe', 'exercise', 'other'].forEach(t =>
+        document.getElementById(`act-${t}`).classList.toggle('selected', t === sub)
+      );
+      document.getElementById('other-label-field').style.display = sub === 'other' ? 'block' : 'none';
     }
 
     function setDiaper(type) {
@@ -440,7 +476,13 @@
       } else if (currentType === 'diaper') {
         row.type = `diaper_${diaperType}`;
       } else {
-        row.type = 'soothe';
+        row.type = `activity_${activitySubtype}`;
+        row.had_formula = false;
+        row.had_solid   = false;
+        if (activitySubtype === 'other') {
+          const label = document.getElementById('other-label').value.trim();
+          if (label) row.notes = label + (notes ? ' · ' + notes : '');
+        }
       }
 
       const { error } = await sb.from('care_logs').insert(row);
@@ -511,11 +553,21 @@
       document.getElementById('stat-diaper-detail').textContent = diapers.length > 0 ? `${wetCount} wet · ${dirtyCount} dirty` : '';
       document.getElementById('stat-diaper-last').textContent   = lastDiaper ? agoStr(lastDiaper) : (diapers.length === 0 ? 'none today' : '');
 
-      // Soothe stats
-      const soothes   = data.filter(r => r.type === 'soothe');
-      const lastSoothe = soothes[0]?.logged_at;
-      document.getElementById('stat-soothe').textContent      = soothes.length > 0 ? `${soothes.length}×` : '—';
-      document.getElementById('stat-soothe-last').textContent = lastSoothe ? agoStr(lastSoothe) : (soothes.length === 0 ? 'none today' : '');
+      // Activity stats
+      const ACTIVITY_LABELS = { play: '🧸', study: '📚', soothe: '🤗', exercise: '🏃', other: '✏️' };
+      const activities  = data.filter(r => r.type.startsWith('activity_'));
+      const lastActivity = activities[0]?.logged_at;
+      const actCounts   = {};
+      activities.forEach(r => {
+        const sub = r.type.replace('activity_', '');
+        actCounts[sub] = (actCounts[sub] || 0) + 1;
+      });
+      const actDetail = Object.entries(actCounts)
+        .map(([k, v]) => `${ACTIVITY_LABELS[k] || '•'} ${v}`)
+        .join('  ');
+      document.getElementById('stat-activity').textContent        = activities.length > 0 ? `${activities.length}×` : '—';
+      document.getElementById('stat-activity-detail').textContent = actDetail;
+      document.getElementById('stat-activity-last').textContent   = lastActivity ? agoStr(lastActivity) : (activities.length === 0 ? 'none today' : '');
     }
 
     // ── Recent logs ───────────────────────────────────────────────────────────
@@ -558,11 +610,14 @@
       }).join('');
     }
 
+    const ACTIVITY_NAMES = { play: '🧸 Play', study: '📚 Study', soothe: '🤗 Soothe', exercise: '🏃 Exercise', other: '✏️ Other' };
     const TYPE_LABELS = {
-      feed: '🍼 Feed', diaper_wet: '🚼 Wet', diaper_dirty: '🚼 Dirty',
-      diaper_both: '🚼 Wet + Dirty', soothe: '🤗 Soothe'
+      feed: '🍼 Feed', diaper_wet: '🚼 Wet', diaper_dirty: '🚼 Dirty', diaper_both: '🚼 Wet + Dirty',
     };
-    const typeLabel = t => TYPE_LABELS[t] || t;
+    const typeLabel = t => {
+      if (t.startsWith('activity_')) return '🎯 ' + (ACTIVITY_NAMES[t.replace('activity_', '')] || t).replace(/^.* /, '');
+      return TYPE_LABELS[t] || t;
+    };
 
     // ── Chart ─────────────────────────────────────────────────────────────────
 
@@ -626,13 +681,13 @@
           const d = new Date(); d.setDate(d.getDate() - i); d.setHours(0,0,0,0);
           days.push(d);
         }
-        // Show shorter labels when many days shown
-        const fmt = totalDays <= 7
-          ? { weekday: 'short' }
-          : totalDays <= 14
-            ? { month: 'numeric', day: 'numeric' }
-            : { month: 'numeric', day: 'numeric' };
-        labels      = days.map(d => d.toLocaleDateString([], fmt));
+        // 1 week: show "Mon\n4/15", more weeks: show date only
+        labels = totalDays <= 7
+          ? days.map(d => [
+              d.toLocaleDateString([], { weekday: 'short' }),
+              d.toLocaleDateString([], { month: 'numeric', day: 'numeric' })
+            ])
+          : days.map(d => d.toLocaleDateString([], { month: 'numeric', day: 'numeric' }));
         formulaVals = days.map(() => 0);
         solidVals   = days.map(() => 0);
         data.forEach(r => {
@@ -688,16 +743,24 @@
 
     // ── Edit modal ────────────────────────────────────────────────────────────
 
-    let editingId   = null;
-    let editDiaper  = 'wet';
-    let editType    = 'feed';
+    let editingId      = null;
+    let editDiaper     = 'wet';
+    let editType       = 'feed';
+    let editActivitySub = 'play';
 
     function openEditModal(row) {
       editingId = row.id;
 
       // Set type
-      const baseType = row.type.startsWith('diaper') ? 'diaper' : row.type;
+      const baseType = row.type.startsWith('diaper') ? 'diaper'
+                     : row.type.startsWith('activity') ? 'activity' : row.type;
       setEditType(baseType);
+
+      // Pre-fill activity subtype
+      if (baseType === 'activity') {
+        const sub = row.type.replace('activity_', '');
+        setEditActivity(sub);
+      }
 
       // Pre-fill feed
       if (baseType === 'feed') {
@@ -739,10 +802,17 @@
 
     function setEditType(type) {
       editType = type;
-      ['feed', 'diaper', 'soothe'].forEach(t => {
+      ['feed', 'diaper', 'activity'].forEach(t => {
         document.getElementById(`edit-btn-${t}`).classList.toggle('active', t === type);
         document.getElementById(`edit-${t}-fields`).classList.toggle('hidden', t !== type);
       });
+    }
+
+    function setEditActivity(sub) {
+      editActivitySub = sub;
+      ['play', 'study', 'soothe', 'exercise', 'other'].forEach(t =>
+        document.getElementById(`edit-act-${t}`).classList.toggle('selected', t === sub)
+      );
     }
 
     function setEditDiaper(type) {
@@ -780,7 +850,7 @@
       } else if (editType === 'diaper') {
         Object.assign(updates, { type: `diaper_${editDiaper}`, had_formula: false, had_solid: false, amount_ml: null, amount_g: null });
       } else {
-        Object.assign(updates, { type: 'soothe', had_formula: false, had_solid: false, amount_ml: null, amount_g: null });
+        Object.assign(updates, { type: `activity_${editActivitySub}`, had_formula: false, had_solid: false, amount_ml: null, amount_g: null });
       }
 
       const { error } = await sb.from('care_logs').update(updates).eq('id', editingId);
