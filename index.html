@@ -23,6 +23,17 @@
     .top-bar h1 { font-size: 24px; font-weight: 700; }
     .logout-btn { font-size: 14px; color: #007aff; background: none; border: none; cursor: pointer; padding: 4px; }
 
+    /* Stats card */
+    .stats-card { background: white; border-radius: 14px; padding: 14px 16px; margin-bottom: 20px; }
+    .stats-card .stats-title { font-size: 11px; font-weight: 700; color: #aeaeb2; text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 10px; }
+    .stats-row { display: flex; gap: 0; }
+    .stat-col { flex: 1; padding: 4px 0; }
+    .stat-col + .stat-col { border-left: 1px solid #f2f2f7; padding-left: 14px; margin-left: 14px; }
+    .stat-icon { font-size: 15px; margin-bottom: 3px; }
+    .stat-value { font-size: 17px; font-weight: 700; color: #1c1c1e; line-height: 1.2; }
+    .stat-label { font-size: 11px; color: #aeaeb2; margin-top: 2px; }
+    .stat-sub { font-size: 11px; color: #6e6e73; margin-top: 3px; }
+
     /* Type selector */
     .type-row { display: flex; gap: 8px; margin-bottom: 20px; }
     .type-btn { flex: 1; padding: 14px 6px; border: 2px solid #e5e5ea; border-radius: 12px; background: white; font-size: 13px; font-weight: 600; cursor: pointer; text-align: center; line-height: 1.4; }
@@ -91,6 +102,33 @@
     <div class="top-bar">
       <h1>Baby Log</h1>
       <button class="logout-btn" onclick="logout()">Sign out</button>
+    </div>
+
+    <!-- Today's summary -->
+    <div class="stats-card">
+      <div class="stats-title">Today</div>
+      <div class="stats-row">
+        <div class="stat-col">
+          <div class="stat-icon">🍼</div>
+          <div class="stat-value" id="stat-formula">—</div>
+          <div class="stat-label">formula</div>
+          <div class="stat-sub" id="stat-solid-sub"></div>
+          <div class="stat-sub" id="stat-feed-last"></div>
+        </div>
+        <div class="stat-col">
+          <div class="stat-icon">👶</div>
+          <div class="stat-value" id="stat-diapers">—</div>
+          <div class="stat-label">diapers</div>
+          <div class="stat-sub" id="stat-diaper-detail"></div>
+          <div class="stat-sub" id="stat-diaper-last"></div>
+        </div>
+        <div class="stat-col">
+          <div class="stat-icon">🤗</div>
+          <div class="stat-value" id="stat-soothe">—</div>
+          <div class="stat-label">soothe</div>
+          <div class="stat-sub" id="stat-soothe-last"></div>
+        </div>
+      </div>
     </div>
 
     <!-- Type buttons -->
@@ -208,6 +246,7 @@
       document.getElementById('auth-screen').classList.add('hidden');
       document.getElementById('app-screen').classList.remove('hidden');
       setDefaultTime();
+      loadStats();
       loadRecent();
     }
 
@@ -295,6 +334,7 @@
       } else {
         showToast('Saved');
         resetForm();
+        loadStats();
         loadRecent();
       }
       btn.disabled = false; btn.textContent = 'Save';
@@ -312,6 +352,54 @@
       document.getElementById('field-g').classList.remove('hidden');
       setDiaper('wet');
       setDefaultTime();
+    }
+
+    // ── Stats ─────────────────────────────────────────────────────────────────
+
+    function agoStr(dateStr) {
+      if (!dateStr) return null;
+      const mins = Math.round((Date.now() - new Date(dateStr)) / 60000);
+      if (mins < 1)   return 'just now';
+      if (mins < 60)  return `${mins}m ago`;
+      const h = Math.floor(mins / 60), m = mins % 60;
+      return m > 0 ? `${h}h ${m}m ago` : `${h}h ago`;
+    }
+
+    async function loadStats() {
+      // Start of today in local time
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+
+      const { data } = await sb.from('care_logs')
+        .select('*')
+        .gte('logged_at', todayStart.toISOString())
+        .order('logged_at', { ascending: false });
+
+      if (!data) return;
+
+      // Feed stats
+      const feeds = data.filter(r => r.type === 'feed');
+      const totalMl  = feeds.reduce((s, r) => s + (r.amount_ml || 0), 0);
+      const totalG   = feeds.reduce((s, r) => s + (r.amount_g  || 0), 0);
+      const lastFeed = feeds[0]?.logged_at;
+      document.getElementById('stat-formula').textContent  = totalMl > 0 ? `${totalMl}ml` : (feeds.length > 0 ? `${feeds.length}×` : '—');
+      document.getElementById('stat-solid-sub').textContent = totalG  > 0 ? `+ ${totalG}g solid` : '';
+      document.getElementById('stat-feed-last').textContent = lastFeed ? agoStr(lastFeed) : (feeds.length === 0 ? 'none today' : '');
+
+      // Diaper stats
+      const diapers    = data.filter(r => r.type.startsWith('diaper'));
+      const wetCount   = diapers.filter(r => r.type === 'diaper_wet'   || r.type === 'diaper_both').length;
+      const dirtyCount = diapers.filter(r => r.type === 'diaper_dirty' || r.type === 'diaper_both').length;
+      const lastDiaper = diapers[0]?.logged_at;
+      document.getElementById('stat-diapers').textContent       = diapers.length > 0 ? `${diapers.length}×` : '—';
+      document.getElementById('stat-diaper-detail').textContent = diapers.length > 0 ? `${wetCount} wet · ${dirtyCount} dirty` : '';
+      document.getElementById('stat-diaper-last').textContent   = lastDiaper ? agoStr(lastDiaper) : (diapers.length === 0 ? 'none today' : '');
+
+      // Soothe stats
+      const soothes   = data.filter(r => r.type === 'soothe');
+      const lastSoothe = soothes[0]?.logged_at;
+      document.getElementById('stat-soothe').textContent      = soothes.length > 0 ? `${soothes.length}×` : '—';
+      document.getElementById('stat-soothe-last').textContent = lastSoothe ? agoStr(lastSoothe) : (soothes.length === 0 ? 'none today' : '');
     }
 
     // ── Recent logs ───────────────────────────────────────────────────────────
