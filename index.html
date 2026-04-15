@@ -77,7 +77,9 @@
     /* Recent */
     .recent { margin-top: 28px; padding-bottom: 40px; }
     .recent h2 { font-size: 12px; font-weight: 700; color: #6e6e73; text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 10px; }
-    .log-item { background: white; border-radius: 10px; padding: 12px 14px; margin-bottom: 8px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
+    .log-group { margin-bottom: 16px; }
+    .log-group-header { font-size: 12px; font-weight: 700; color: #6e6e73; text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 6px; padding: 0 2px; }
+    .log-item { background: white; border-radius: 10px; padding: 12px 14px; margin-bottom: 6px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
     .log-item:active { background: #f5f5f7; }
     .log-item .log-body { flex: 1; }
     .log-item .log-type { font-size: 14px; font-weight: 600; color: #007aff; }
@@ -257,9 +259,9 @@
 
     <button class="submit-btn" id="submit-btn" onclick="submitLog()">Save</button>
 
-    <!-- Recent entries -->
+    <!-- Recent entries grouped by category -->
     <div class="recent">
-      <h2>Recent</h2>
+      <h2>Today's Log</h2>
       <div id="recent-list"><p class="no-logs">Loading…</p></div>
     </div>
   </div>
@@ -572,42 +574,71 @@
 
     // ── Recent logs ───────────────────────────────────────────────────────────
 
+    function entryDetail(r) {
+      let detail = '';
+      if (r.type === 'feed') {
+        const parts = [];
+        if (r.had_formula) parts.push('Formula' + (r.amount_ml ? ' ' + r.amount_ml + 'ml' : ''));
+        if (r.had_solid)   parts.push('Solid'   + (r.amount_g  ? ' ' + r.amount_g  + 'g'  : ''));
+        detail = parts.join(' + ');
+      } else if (r.type.startsWith('diaper')) {
+        const sub = r.type.replace('diaper_', '');
+        detail = sub.charAt(0).toUpperCase() + sub.slice(1);
+      } else if (r.type.startsWith('activity_')) {
+        const sub = r.type.replace('activity_', '');
+        detail = (ACTIVITY_NAMES[sub] || sub).replace(/^.{2} /, ''); // strip emoji
+      }
+      if (r.notes) detail += (detail ? ' · ' : '') + r.notes;
+      return detail;
+    }
+
+    function renderLogItem(r) {
+      const time = new Date(r.logged_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const detail = entryDetail(r);
+      const rowJson = encodeURIComponent(JSON.stringify(r));
+      return `
+        <div class="log-item" onclick="openEditModal(JSON.parse(decodeURIComponent('${rowJson}')))">
+          <div class="log-body">
+            <div class="log-time" style="font-size:13px;font-weight:600;color:#1c1c1e;">${time}</div>
+            ${detail ? `<div class="log-detail">${detail}</div>` : ''}
+          </div>
+          <div class="edit-arrow">›</div>
+        </div>`;
+    }
+
+    function renderGroup(icon, label, rows) {
+      if (rows.length === 0) return `
+        <div class="log-group">
+          <div class="log-group-header">${icon} ${label}</div>
+          <p class="no-logs" style="font-size:13px;padding:8px 2px;">None today</p>
+        </div>`;
+      return `
+        <div class="log-group">
+          <div class="log-group-header">${icon} ${label}</div>
+          ${rows.map(renderLogItem).join('')}
+        </div>`;
+    }
+
     async function loadRecent() {
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+
       const { data } = await sb.from('care_logs')
         .select('*')
-        .order('logged_at', { ascending: false })
-        .limit(5);
+        .gte('logged_at', todayStart.toISOString())
+        .order('logged_at', { ascending: false });
 
       const list = document.getElementById('recent-list');
-      if (!data || data.length === 0) {
-        list.innerHTML = '<p class="no-logs">No entries yet</p>'; return;
-      }
-      list.innerHTML = data.map(r => {
-        const time = new Date(r.logged_at).toLocaleString([], {
-          month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
-        });
-        let detail = '';
-        if (r.type === 'feed') {
-          const parts = [];
-          if (r.had_formula) parts.push('Formula' + (r.amount_ml ? ' ' + r.amount_ml + 'ml' : ''));
-          if (r.had_solid)   parts.push('Solid'   + (r.amount_g  ? ' ' + r.amount_g  + 'g'  : ''));
-          detail = parts.join(' + ');
-        } else if (r.type.startsWith('diaper')) {
-          const sub = r.type.replace('diaper_', '');
-          detail = sub.charAt(0).toUpperCase() + sub.slice(1);
-        }
-        if (r.notes) detail += (detail ? ' · ' : '') + r.notes;
-        const rowJson = encodeURIComponent(JSON.stringify(r));
-        return `
-          <div class="log-item" onclick="openEditModal(JSON.parse(decodeURIComponent('${rowJson}')))">
-            <div class="log-body">
-              <div class="log-type">${typeLabel(r.type)}</div>
-              <div class="log-time">${time}</div>
-              ${detail ? `<div class="log-detail">${detail}</div>` : ''}
-            </div>
-            <div class="edit-arrow">›</div>
-          </div>`;
-      }).join('');
+      if (!data) { list.innerHTML = '<p class="no-logs">Failed to load</p>'; return; }
+
+      const feeds      = data.filter(r => r.type === 'feed');
+      const diapers    = data.filter(r => r.type.startsWith('diaper'));
+      const activities = data.filter(r => r.type.startsWith('activity'));
+
+      list.innerHTML =
+        renderGroup('🍼', 'Feed',     feeds) +
+        renderGroup('🚼', 'Diapers',  diapers) +
+        renderGroup('🎯', 'Activity', activities);
     }
 
     const ACTIVITY_NAMES = { play: '🧸 Play', study: '📚 Study', soothe: '🤗 Soothe', exercise: '🏃 Exercise', other: '✏️ Other' };
