@@ -686,8 +686,8 @@
     // Gap color thresholds — tweak these to adjust sensitivity
     const GAP_ON_TRACK_ML = 5;  // ml — below this = "on track" (no color change)
     const GAP_ON_TRACK_G  = 5;  // g
-    const GAP_MAX_STEPS   = 10;  // intensity steps; step size = avg / GAP_MAX_STEPS
-                                // so full intensity is reached when gap ≈ daily avg
+    const GAP_MAX_STEPS   = 10; // intensity steps; step size = avg-per-session / GAP_MAX_STEPS
+                                // full intensity when gap ≈ one typical feeding session
 
     let feedChart      = null;
     let chartMode      = 'week'; // 'week' | 'byweek'
@@ -835,6 +835,7 @@
 
       // ── Grey avg bars: store values for canvas plugin, compute Option B ──
       chartAvgFml = 0; chartAvgSld = 0; chartTodayIdx = -1;
+      let avgPerFeedMl = 0, avgPerFeedG = 0; // avg per individual session (for step size)
 
       if (chartMode === 'week') {
         const todayKey = dateKey(new Date());
@@ -861,12 +862,19 @@
           const sldDays = pastSums.filter(s => s.g  > 0);
           chartAvgFml = fmlDays.length > 0 ? Math.round(fmlDays.reduce((s, d) => s + d.ml, 0) / fmlDays.length) : 0;
           chartAvgSld = sldDays.length > 0 ? Math.round(sldDays.reduce((s, d) => s + d.g,  0) / sldDays.length) : 0;
+
+          // Per-session avg: excludes today, only past 6 days' individual feeds
+          const pastFeeds = data.filter(r => dateKey(new Date(r.logged_at)) !== todayKey);
+          const fmlFeeds  = pastFeeds.filter(r => (r.amount_ml || 0) > 0);
+          const sldFeeds  = pastFeeds.filter(r => (r.amount_g  || 0) > 0);
+          avgPerFeedMl = fmlFeeds.length > 0 ? Math.round(fmlFeeds.reduce((s, r) => s + r.amount_ml, 0) / fmlFeeds.length) : 0;
+          avgPerFeedG  = sldFeeds.length > 0 ? Math.round(sldFeeds.reduce((s, r) => s + r.amount_g,  0) / sldFeeds.length) : 0;
         }
       }
 
-      // Dynamic step size = avg / GAP_MAX_STEPS — full intensity when gap ≈ avg
-      const gapStepMl = chartAvgFml > 0 ? chartAvgFml / GAP_MAX_STEPS : 20;
-      const gapStepG  = chartAvgSld > 0 ? chartAvgSld / GAP_MAX_STEPS : 50;
+      // Step = avg per session / GAP_MAX_STEPS — full intensity when gap ≈ one typical feed
+      const gapStepMl = avgPerFeedMl > 0 ? avgPerFeedMl / GAP_MAX_STEPS : 20;
+      const gapStepG  = avgPerFeedG  > 0 ? avgPerFeedG  / GAP_MAX_STEPS : 50;
 
       // Per-bar colors: today's bar reflects gap status with intensity scaling
       function gapColor(diff, base, onTrack, step) {
