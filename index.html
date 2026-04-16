@@ -77,6 +77,13 @@
     /* Recent */
     .recent { margin-top: 28px; padding-bottom: 40px; }
     .recent h2 { font-size: 12px; font-weight: 700; color: #6e6e73; text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 10px; }
+    /* Date toggle */
+    .date-toggle { display: flex; gap: 0; border: 1.5px solid #e5e5ea; border-radius: 10px; overflow: hidden; }
+    .date-toggle button { flex: 1; padding: 7px 0; border: none; background: white; font-size: 13px; font-weight: 600; color: #6e6e73; cursor: pointer; }
+    .date-toggle button.active { background: #1c1c1e; color: white; }
+    .recent-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+    .recent-header h2 { margin-bottom: 0; }
+
     /* 3-column log layout */
     .log-columns { display: flex; gap: 8px; align-items: flex-start; }
     .log-col { flex: 1; min-width: 0; }
@@ -182,6 +189,9 @@
       <div class="chart-legend">
         <div class="legend-item"><div class="legend-dot" style="background:#4a9eff"></div>Formula (ml)</div>
         <div class="legend-item"><div class="legend-dot" style="background:#34c759"></div>Solid (g)</div>
+        <div class="legend-item" id="avg-legend" style="display:none">
+          <div class="legend-dot" style="background:rgba(150,150,150,0.6)"></div>Avg by now
+        </div>
       </div>
       <canvas id="feed-chart" height="160"></canvas>
       <p id="chart-empty" style="text-align:center;color:#aeaeb2;font-size:13px;padding:20px 0;display:none;">No feeding data yet</p>
@@ -265,7 +275,13 @@
 
     <!-- Recent entries grouped by category -->
     <div class="recent">
-      <h2>Today's Log</h2>
+      <div class="recent-header">
+        <h2 id="log-date-label">Today's Log</h2>
+        <div class="date-toggle">
+          <button id="toggle-today"     class="active" onclick="setLogDate(0)">Today</button>
+          <button id="toggle-yesterday"            onclick="setLogDate(-1)">Yesterday</button>
+        </div>
+      </div>
       <div id="recent-list"><p class="no-logs">Loading…</p></div>
     </div>
   </div>
@@ -342,10 +358,28 @@
     const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im54Z2d5dGN6bWphZXh0d3hyZnJxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxODMzMTIsImV4cCI6MjA5MTc1OTMxMn0.gZSZqPxs7sJGa8f6nIap8QVD3cIpoUojjVmXfjvl4R4';
     const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-    let currentType    = 'feed';
-    let diaperType     = 'wet';
+    let currentType     = 'feed';
+    let diaperType      = 'wet';
     let activitySubtype = 'play';
-    let currentUser    = null;
+    let currentUser     = null;
+    let logDate         = 0; // 0 = today, -1 = yesterday
+
+    function setLogDate(offset) {
+      logDate = offset;
+      document.getElementById('toggle-today').classList.toggle('active', offset === 0);
+      document.getElementById('toggle-yesterday').classList.toggle('active', offset === -1);
+      document.getElementById('log-date-label').textContent = offset === 0 ? "Today's Log" : "Yesterday's Log";
+      loadStats();
+      loadRecent();
+    }
+
+    function dayBounds(offset) {
+      const d = new Date();
+      d.setDate(d.getDate() + offset);
+      const start = new Date(d); start.setHours(0, 0, 0, 0);
+      const end   = new Date(d); end.setHours(23, 59, 59, 999);
+      return { start, end };
+    }
 
     // ── Auth ──────────────────────────────────────────────────────────────────
 
@@ -530,13 +564,11 @@
     }
 
     async function loadStats() {
-      // Start of today in local time
-      const todayStart = new Date();
-      todayStart.setHours(0, 0, 0, 0);
-
+      const { start, end } = dayBounds(logDate);
       const { data } = await sb.from('care_logs')
         .select('*')
-        .gte('logged_at', todayStart.toISOString())
+        .gte('logged_at', start.toISOString())
+        .lte('logged_at', end.toISOString())
         .order('logged_at', { ascending: false });
 
       if (!data) return;
@@ -619,12 +651,11 @@
     }
 
     async function loadRecent() {
-      const todayStart = new Date();
-      todayStart.setHours(0, 0, 0, 0);
-
+      const { start, end } = dayBounds(logDate);
       const { data } = await sb.from('care_logs')
         .select('*')
-        .gte('logged_at', todayStart.toISOString())
+        .gte('logged_at', start.toISOString())
+        .lte('logged_at', end.toISOString())
         .order('logged_at', { ascending: false });
 
       const list = document.getElementById('recent-list');
@@ -745,6 +776,41 @@
         solidVals   = weeks.map(wk => Math.round(weekMap[wk].gTotal  / weekMap[wk].days.size));
       }
 
+      // ── Grey average bars for today only (Option B: cumulative by current time) ──
+      let avgFormulaData = labels.map(() => 0);
+      let avgSolidData   = labels.map(() => 0);
+
+      if (chartMode === 'week') {
+        // Find today's index in the labels array
+        const todayKey = dateKey(new Date());
+        const todayIdx = days.findIndex(d => dateKey(d) === todayKey);
+
+        if (todayIdx >= 0) {
+          const nowMinutes = new Date().getHours() * 60 + new Date().getMinutes();
+          // For each past day (exclude today), sum formula/solid consumed before nowMinutes
+          const pastDays = days.filter((_, i) => i !== todayIdx);
+          const pastSums = pastDays.map(d => {
+            const dKey = dateKey(d);
+            const dayEntries = data.filter(r => {
+              const rDate = new Date(r.logged_at);
+              const rMins = rDate.getHours() * 60 + rDate.getMinutes();
+              return dateKey(rDate) === dKey && rMins <= nowMinutes;
+            });
+            return {
+              ml: dayEntries.reduce((s, r) => s + (r.amount_ml || 0), 0),
+              g:  dayEntries.reduce((s, r) => s + (r.amount_g  || 0), 0),
+            };
+          }).filter(s => s.ml > 0 || s.g > 0); // only days with actual data
+
+          if (pastSums.length > 0) {
+            avgFormulaData[todayIdx] = Math.round(pastSums.reduce((s, d) => s + d.ml, 0) / pastSums.length);
+            avgSolidData[todayIdx]   = Math.round(pastSums.reduce((s, d) => s + d.g,  0) / pastSums.length);
+            document.getElementById('avg-legend').style.display = 'flex';
+          }
+        }
+      }
+      if (chartMode !== 'week') document.getElementById('avg-legend').style.display = 'none';
+
       const ctx = document.getElementById('feed-chart').getContext('2d');
       if (feedChart) feedChart.destroy();
       feedChart = new Chart(ctx, {
@@ -752,15 +818,20 @@
         data: {
           labels,
           datasets: [
-            { label: 'Formula (ml)', data: formulaVals, backgroundColor: '#4a9eff', borderRadius: 4, stack: 'feed' },
-            { label: 'Solid (g)',    data: solidVals,   backgroundColor: '#34c759', borderRadius: 4, stack: 'feed' },
+            { label: 'Avg formula by now', data: avgFormulaData, backgroundColor: 'rgba(180,180,180,0.45)', borderRadius: 4, stack: 'avg', order: 4 },
+            { label: 'Avg solid by now',   data: avgSolidData,   backgroundColor: 'rgba(100,100,100,0.40)', borderRadius: 4, stack: 'avg', order: 3 },
+            { label: 'Formula (ml)', data: formulaVals, backgroundColor: '#4a9eff', borderRadius: 4, stack: 'feed', order: 2 },
+            { label: 'Solid (g)',    data: solidVals,   backgroundColor: '#34c759', borderRadius: 4, stack: 'feed', order: 1 },
           ]
         },
         options: {
           responsive: true,
           plugins: { legend: { display: false }, tooltip: {
             callbacks: {
-              label: ctx => ctx.dataset.label + ': ' + ctx.parsed.y + (ctx.datasetIndex === 0 ? 'ml' : 'g')
+              label: ctx => {
+                if (ctx.dataset.order >= 3) return null; // hide avg from tooltip
+                return ctx.dataset.label + ': ' + ctx.parsed.y + (ctx.datasetIndex === 2 ? 'ml' : 'g');
+              }
             }
           }},
           scales: {
