@@ -139,7 +139,10 @@
   <div id="app-screen" class="container hidden">
     <div class="top-bar">
       <h1>Baby Log</h1>
-      <button class="logout-btn" onclick="logout()">Sign out</button>
+      <div style="display:flex;gap:12px;align-items:center;">
+        <button class="logout-btn" onclick="refreshAll()" style="color:#34c759;">↻ Refresh</button>
+        <button class="logout-btn" onclick="logout()">Sign out</button>
+      </div>
     </div>
 
     <!-- Today's summary -->
@@ -369,8 +372,7 @@
       document.getElementById('toggle-today').classList.toggle('active', offset === 0);
       document.getElementById('toggle-yesterday').classList.toggle('active', offset === -1);
       document.getElementById('log-date-label').textContent = offset === 0 ? "Today's Log" : "Yesterday's Log";
-      loadStats();
-      loadRecent();
+      loadRecent(); // stats card always shows today — do not reload stats here
     }
 
     function dayBounds(offset) {
@@ -683,9 +685,36 @@
 
     // ── Chart ─────────────────────────────────────────────────────────────────
 
-    let feedChart   = null;
-    let chartMode   = 'week'; // 'week' | 'byweek'
-    let weeksToShow = 1;      // configurable in daily mode
+    let feedChart      = null;
+    let chartMode      = 'week'; // 'week' | 'byweek'
+    let weeksToShow    = 1;      // configurable in daily mode
+    let chartAvgFml    = 0;      // avg formula by now (for plugin)
+    let chartAvgSld    = 0;      // avg solid by now (for plugin)
+    let chartTodayIdx  = -1;     // today's bar index (for plugin)
+
+    // Custom plugin: draw grey avg bars BEHIND today's actual bars
+    const avgBarPlugin = {
+      id: 'avgBar',
+      beforeDatasetsDraw(chart) {
+        if (chartMode !== 'week' || chartTodayIdx < 0 || (chartAvgFml === 0 && chartAvgSld === 0)) return;
+        const meta = chart.getDatasetMeta(0); // formula dataset (index 0 after removing avg datasets)
+        const bar  = meta.data[chartTodayIdx];
+        if (!bar) return;
+        const { ctx, scales: { y } } = chart;
+        const x = bar.x, w = bar.width;
+        const y0      = y.getPixelForValue(0);
+        const yFml    = y.getPixelForValue(chartAvgFml);
+        const ySld    = y.getPixelForValue(chartAvgFml + chartAvgSld);
+        ctx.save();
+        ctx.fillStyle = 'rgba(180,180,180,0.45)'; // light grey = formula avg
+        ctx.beginPath(); ctx.roundRect(x - w/2, yFml, w, y0 - yFml, 4); ctx.fill();
+        if (chartAvgSld > 0) {
+          ctx.fillStyle = 'rgba(110,110,110,0.40)'; // dark grey = solid avg
+          ctx.beginPath(); ctx.roundRect(x - w/2, ySld, w, yFml - ySld, 4); ctx.fill();
+        }
+        ctx.restore();
+      }
+    };
 
     function setChartMode(mode) {
       chartMode = mode;
@@ -776,66 +805,70 @@
         solidVals   = weeks.map(wk => Math.round(weekMap[wk].gTotal  / weekMap[wk].days.size));
       }
 
-      // ── Grey average bars for today only (Option B: cumulative by current time) ──
-      let avgFormulaData = labels.map(() => 0);
-      let avgSolidData   = labels.map(() => 0);
+      // ── Grey avg bars: store values for canvas plugin, compute Option B ──
+      chartAvgFml = 0; chartAvgSld = 0; chartTodayIdx = -1;
 
       if (chartMode === 'week') {
-        // Find today's index in the labels array
         const todayKey = dateKey(new Date());
-        const todayIdx = days.findIndex(d => dateKey(d) === todayKey);
-
-        if (todayIdx >= 0) {
+        chartTodayIdx  = days.findIndex(d => dateKey(d) === todayKey);
+        if (chartTodayIdx >= 0) {
           const nowMinutes = new Date().getHours() * 60 + new Date().getMinutes();
-          // For each past day (exclude today), sum formula/solid consumed before nowMinutes
-          const pastDays = days.filter((_, i) => i !== todayIdx);
-          const pastSums = pastDays.map(d => {
-            const dKey = dateKey(d);
-            const dayEntries = data.filter(r => {
-              const rDate = new Date(r.logged_at);
-              const rMins = rDate.getHours() * 60 + rDate.getMinutes();
-              return dateKey(rDate) === dKey && rMins <= nowMinutes;
-            });
-            return {
-              ml: dayEntries.reduce((s, r) => s + (r.amount_ml || 0), 0),
-              g:  dayEntries.reduce((s, r) => s + (r.amount_g  || 0), 0),
-            };
-          }).filter(s => s.ml > 0 || s.g > 0); // only days with actual data
+          const pastSums = days
+            .filter((_, i) => i !== chartTodayIdx)
+            .map(d => {
+              const dKey = dateKey(d);
+              const entries = data.filter(r => {
+                const rDate = new Date(r.logged_at);
+                return dateKey(rDate) === dKey && (rDate.getHours() * 60 + rDate.getMinutes()) <= nowMinutes;
+              });
+              return {
+                ml: entries.reduce((s, r) => s + (r.amount_ml || 0), 0),
+                g:  entries.reduce((s, r) => s + (r.amount_g  || 0), 0),
+              };
+            }).filter(s => s.ml > 0 || s.g > 0);
 
           if (pastSums.length > 0) {
-            avgFormulaData[todayIdx] = Math.round(pastSums.reduce((s, d) => s + d.ml, 0) / pastSums.length);
-            avgSolidData[todayIdx]   = Math.round(pastSums.reduce((s, d) => s + d.g,  0) / pastSums.length);
+            chartAvgFml = Math.round(pastSums.reduce((s, d) => s + d.ml, 0) / pastSums.length);
+            chartAvgSld = Math.round(pastSums.reduce((s, d) => s + d.g,  0) / pastSums.length);
             document.getElementById('avg-legend').style.display = 'flex';
+          } else {
+            document.getElementById('avg-legend').style.display = 'none';
           }
         }
+      } else {
+        document.getElementById('avg-legend').style.display = 'none';
       }
-      if (chartMode !== 'week') document.getElementById('avg-legend').style.display = 'none';
 
       const ctx = document.getElementById('feed-chart').getContext('2d');
       if (feedChart) feedChart.destroy();
       feedChart = new Chart(ctx, {
         type: 'bar',
+        plugins: [avgBarPlugin],
         data: {
           labels,
           datasets: [
-            { label: 'Avg formula by now', data: avgFormulaData, backgroundColor: 'rgba(180,180,180,0.45)', borderRadius: 4, stack: 'avg', order: 4 },
-            { label: 'Avg solid by now',   data: avgSolidData,   backgroundColor: 'rgba(100,100,100,0.40)', borderRadius: 4, stack: 'avg', order: 3 },
-            { label: 'Formula (ml)', data: formulaVals, backgroundColor: '#4a9eff', borderRadius: 4, stack: 'feed', order: 2 },
-            { label: 'Solid (g)',    data: solidVals,   backgroundColor: '#34c759', borderRadius: 4, stack: 'feed', order: 1 },
+            { label: 'Formula (ml)', data: formulaVals, backgroundColor: '#4a9eff', borderRadius: 4, stack: 'feed' },
+            { label: 'Solid (g)',    data: solidVals,   backgroundColor: '#34c759', borderRadius: 4, stack: 'feed' },
           ]
         },
         options: {
           responsive: true,
-          plugins: { legend: { display: false }, tooltip: {
+          plugins: { legend: { display: false }, avgBar: {}, tooltip: {
             callbacks: {
-              title: () => '',  // suppress the date label entirely
+              title: () => '',
               label: ctx => {
                 const v = ctx.parsed.y;
                 if (!v) return null;
-                if (ctx.dataset.order === 4) return `Avg formula by now: ${v}ml`;
-                if (ctx.dataset.order === 3) return `Avg solid by now: ${v}g`;
-                if (ctx.datasetIndex === 2)  return `Formula: ${v}ml`;
-                return `Solid: ${v}g`;
+                return ctx.datasetIndex === 0 ? `Formula: ${v}ml` : `Solid: ${v}g`;
+              },
+              afterBody: (items) => {
+                if (chartMode !== 'week' || !items.length) return [];
+                const idx = items[0].dataIndex;
+                if (idx !== chartTodayIdx || (chartAvgFml === 0 && chartAvgSld === 0)) return [];
+                const lines = [];
+                if (chartAvgFml > 0) lines.push(`Avg formula by now: ${chartAvgFml}ml`);
+                if (chartAvgSld > 0) lines.push(`Avg solid by now: ${chartAvgSld}g`);
+                return lines;
               }
             }
           }},
@@ -974,6 +1007,13 @@
     }
 
     // ── Toast ─────────────────────────────────────────────────────────────────
+
+    function refreshAll() {
+      loadStats();
+      loadChart();
+      loadRecent();
+      showToast('Refreshed');
+    }
 
     function showToast(msg) {
       const t = document.getElementById('toast');
