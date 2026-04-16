@@ -694,7 +694,7 @@
     let chartTodaySld  = 0;      // today's actual solid total
     let chartTodayIdx  = -1;     // today's bar index (for plugin)
 
-    // Custom plugin: draw grey avg outline + independent formula/solid gap highlights
+    // Custom plugin: draw grey avg outline on today's bar only
     const avgBarPlugin = {
       id: 'avgBar',
       afterDatasetsDraw(chart) {
@@ -705,66 +705,10 @@
         const { ctx, scales: { y } } = chart;
         const x = bar.x, w = bar.width;
         const y0 = y.getPixelForValue(0);
-
         ctx.save();
-
-        // Grey avg outline (combined avg height as reference backdrop)
-        const yAvgCombined = y.getPixelForValue(chartAvgFml + chartAvgSld);
-        ctx.fillStyle = 'rgba(180,180,180,0.18)';
-        ctx.beginPath(); ctx.roundRect(x - w/2, yAvgCombined, w, y0 - yAvgCombined, 4); ctx.fill();
-
-        // Helper: draw a gap zone + dashed line + annotation for one track
-        function drawGap(actualVal, avgVal, unit, labelY) {
-          const diff = avgVal - actualVal; // positive = deficit, negative = surplus
-          if (Math.abs(diff) < 5) return; // skip noise < 5 units
-          const yActual = y.getPixelForValue(actualVal);
-          const yAvg    = y.getPixelForValue(avgVal);
-          const gapTop    = Math.min(yActual, yAvg);
-          const gapBottom = Math.max(yActual, yAvg);
-          const isDeficit = diff > 0;
-          const color     = isDeficit ? '255,59,48' : '52,199,89';
-          // Gap fill
-          ctx.fillStyle = `rgba(${color},0.22)`;
-          ctx.beginPath(); ctx.roundRect(x - w/2, gapTop, w, gapBottom - gapTop, 3); ctx.fill();
-          // Dashed avg line
-          ctx.strokeStyle = `rgba(${color},0.75)`;
-          ctx.lineWidth = 1.5; ctx.setLineDash([4, 3]);
-          ctx.beginPath(); ctx.moveTo(x - w/2, yAvg); ctx.lineTo(x + w/2, yAvg); ctx.stroke();
-          ctx.setLineDash([]);
-          // Annotation label
-          ctx.fillStyle = `rgba(${color},0.95)`;
-          ctx.font = 'bold 10px -apple-system, sans-serif';
-          ctx.textAlign = 'center';
-          const sign = isDeficit ? '−' : '+';
-          ctx.fillText(`${sign}${Math.abs(diff)}${unit}`, x, labelY);
-        }
-
-        // ── Formula gap (always shown when avgFml > 0) ──
-        let fmlLabelY = null;
-        if (chartAvgFml > 0) {
-          const fmlDiff = chartAvgFml - chartTodayFml;
-          if (Math.abs(fmlDiff) >= 5) {
-            const yActualFml = y.getPixelForValue(chartTodayFml);
-            const yAvgFml    = y.getPixelForValue(chartAvgFml);
-            fmlLabelY = Math.min(yActualFml, yAvgFml) - 5;
-            drawGap(chartTodayFml, chartAvgFml, 'ml', fmlLabelY);
-          }
-        }
-
-        // ── Solid gap (only when avgSld > 0 — no comparison without history) ──
-        if (chartAvgSld > 0) {
-          const combinedActual = chartTodayFml + chartTodaySld;
-          const combinedAvg    = chartAvgFml + chartAvgSld;
-          const sldDiff = chartAvgSld - chartTodaySld;
-          if (Math.abs(sldDiff) >= 5) {
-            const yActualCombined = y.getPixelForValue(combinedActual);
-            const yAvgCombined2   = y.getPixelForValue(combinedAvg);
-            // Stack solid label above formula label if both exist
-            const sldLabelY = Math.min(yActualCombined, yAvgCombined2) - (fmlLabelY !== null ? 16 : 5);
-            drawGap(combinedActual, combinedAvg, 'g', sldLabelY);
-          }
-        }
-
+        const yAvgTop = y.getPixelForValue(chartAvgFml + chartAvgSld);
+        ctx.fillStyle = 'rgba(180,180,180,0.25)';
+        ctx.beginPath(); ctx.roundRect(x - w/2, yAvgTop, w, y0 - yAvgTop, 4); ctx.fill();
         ctx.restore();
       }
     };
@@ -919,17 +863,16 @@
                 document.body.appendChild(el);
               }
               if (!tooltip.opacity) { el.style.opacity = '0'; return; }
-              const dp  = tooltip.dataPoints || [];
-              const fml = dp.find(d => d.datasetIndex === 0)?.parsed.y || 0;
-              const sld = dp.find(d => d.datasetIndex === 1)?.parsed.y || 0;
-              const idx = dp[0]?.dataIndex;
-              const isToday = chartMode === 'week' && weeksToShow === 1 && idx === chartTodayIdx;
+              const dp        = tooltip.dataPoints || [];
+              const hovered   = dp[0]?.datasetIndex; // 0 = formula segment, 1 = solid segment
+              const fml       = dp.find(d => d.datasetIndex === 0)?.parsed.y || 0;
+              const sld       = dp.find(d => d.datasetIndex === 1)?.parsed.y || 0;
+              const idx       = dp[0]?.dataIndex;
+              const isToday   = chartMode === 'week' && weeksToShow === 1 && idx === chartTodayIdx;
               const rows = [];
-              if (fml) rows.push(`<span style="color:#4a9eff">●</span> Formula: <b>${fml}ml</b>`);
-              if (sld) rows.push(`<span style="color:#ffcc00">●</span> Solid: <b>${sld}g</b>`);
-              if (isToday && (chartAvgFml > 0 || chartAvgSld > 0)) {
-                rows.push('<div style="border-top:1px solid rgba(255,255,255,0.18);margin:4px 0"></div>');
-                if (chartAvgFml > 0) {
+              if (hovered === 0) {
+                rows.push(`<span style="color:#4a9eff">●</span> Formula: <b>${fml}ml</b>`);
+                if (isToday && chartAvgFml > 0) {
                   const diff = chartTodayFml - chartAvgFml;
                   const abs  = Math.abs(diff);
                   const tag  = abs < 5
@@ -937,9 +880,11 @@
                     : diff < 0
                       ? `<span style="color:#ff3b30"><b>−${abs}ml</b></span>`
                       : `<span style="color:#34c759"><b>+${abs}ml</b></span>`;
-                  rows.push(`Formula avg: ${chartAvgFml}ml &nbsp;${tag}`);
+                  rows.push(`<span style="color:#aaa;font-size:11px">Avg by now: ${chartAvgFml}ml &nbsp;${tag}</span>`);
                 }
-                if (chartAvgSld > 0) {
+              } else {
+                rows.push(`<span style="color:#ffcc00">●</span> Solid: <b>${sld}g</b>`);
+                if (isToday && chartAvgSld > 0) {
                   const diff = chartTodaySld - chartAvgSld;
                   const abs  = Math.abs(diff);
                   const tag  = abs < 5
@@ -947,7 +892,7 @@
                     : diff < 0
                       ? `<span style="color:#ff3b30"><b>−${abs}g</b></span>`
                       : `<span style="color:#34c759"><b>+${abs}g</b></span>`;
-                  rows.push(`Solid avg: ${chartAvgSld}g &nbsp;${tag}`);
+                  rows.push(`<span style="color:#aaa;font-size:11px">Avg by now: ${chartAvgSld}g &nbsp;${tag}</span>`);
                 }
               }
               el.innerHTML = rows.join('<br>');
