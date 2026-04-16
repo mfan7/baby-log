@@ -108,7 +108,7 @@
     .delete-btn { width: 100%; padding: 15px; background: white; color: #ff3b30; border: 1.5px solid #ff3b30; border-radius: 12px; font-size: 16px; font-weight: 600; cursor: pointer; margin-top: 10px; font-family: inherit; }
 
     /* Chart card */
-    .chart-card { background: white; border-radius: 14px; padding: 14px 16px 16px; margin-bottom: 20px; }
+    .chart-card { background: white; border-radius: 14px; padding: 14px 16px 16px; margin-bottom: 20px; position: relative; overflow: visible; }
     .chart-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
     .chart-title { font-size: 11px; font-weight: 700; color: #aeaeb2; text-transform: uppercase; letter-spacing: 0.6px; }
     .chart-toggle { display: flex; gap: 0; border: 1.5px solid #e5e5ea; border-radius: 8px; overflow: hidden; }
@@ -192,9 +192,6 @@
       <div class="chart-legend">
         <div class="legend-item"><div class="legend-dot" style="background:#4a9eff"></div>Formula (ml)</div>
         <div class="legend-item"><div class="legend-dot" style="background:#ffcc00"></div>Solid (g)</div>
-        <div class="legend-item" id="avg-legend" style="display:none">
-          <div class="legend-dot" style="background:rgba(150,150,150,0.6)"></div>Avg by now
-        </div>
       </div>
       <canvas id="feed-chart" height="160"></canvas>
       <p id="chart-empty" style="text-align:center;color:#aeaeb2;font-size:13px;padding:20px 0;display:none;">No feeding data yet</p>
@@ -734,13 +731,15 @@
     // #chart-tooltip   → Chart.js external (bar amounts)
     // #chart-dot-tip   → manual mousemove (dot avg/gap context)
 
+    function getChartCard() { return document.querySelector('.chart-card'); }
+
     function getOrCreateTooltip() {
       let el = document.getElementById('chart-tooltip');
       if (!el) {
         el = document.createElement('div');
         el.id = 'chart-tooltip';
-        el.style.cssText = 'position:fixed;background:rgba(28,28,30,0.88);color:#fff;border-radius:10px;padding:8px 12px;font-size:12px;line-height:1.7;pointer-events:none;white-space:nowrap;z-index:999;backdrop-filter:blur(4px);transition:opacity .1s;';
-        document.body.appendChild(el);
+        el.style.cssText = 'position:absolute;background:rgba(28,28,30,0.88);color:#fff;border-radius:10px;padding:8px 12px;font-size:12px;line-height:1.7;pointer-events:none;white-space:nowrap;z-index:999;backdrop-filter:blur(4px);transition:opacity .1s;opacity:0;';
+        getChartCard().appendChild(el);
       }
       return el;
     }
@@ -750,8 +749,8 @@
       if (!el) {
         el = document.createElement('div');
         el.id = 'chart-dot-tip';
-        el.style.cssText = 'position:fixed;background:rgba(28,28,30,0.88);color:#fff;border-radius:10px;padding:8px 12px;font-size:12px;line-height:1.7;pointer-events:none;white-space:nowrap;z-index:1000;backdrop-filter:blur(4px);transition:opacity .1s;opacity:0;';
-        document.body.appendChild(el);
+        el.style.cssText = 'position:absolute;background:rgba(28,28,30,0.88);color:#fff;border-radius:10px;padding:8px 12px;font-size:12px;line-height:1.7;pointer-events:none;white-space:nowrap;z-index:1000;backdrop-filter:blur(4px);transition:opacity .1s;opacity:0;';
+        getChartCard().appendChild(el);
       }
       return el;
     }
@@ -778,10 +777,11 @@
           rows.push(`<span style="color:#aaa;font-size:11px">Avg by now: ${chartAvgSld}g &nbsp;${tag}</span>`);
         }
       }
+      const cardRect = getChartCard().getBoundingClientRect();
       el.innerHTML = rows.join('<br>');
       el.style.opacity = '1';
-      el.style.left = (clientX + 12) + 'px';
-      el.style.top  = (clientY - 10) + 'px';
+      el.style.left = (clientX - cardRect.left + 12) + 'px';
+      el.style.top  = (clientY - cardRect.top  - 10) + 'px';
     }
 
     // Wire up dot hover once (canvas element persists across chart redraws)
@@ -920,11 +920,7 @@
           const sldDays = pastSums.filter(s => s.g  > 0);
           chartAvgFml = fmlDays.length > 0 ? Math.round(fmlDays.reduce((s, d) => s + d.ml, 0) / fmlDays.length) : 0;
           chartAvgSld = sldDays.length > 0 ? Math.round(sldDays.reduce((s, d) => s + d.g,  0) / sldDays.length) : 0;
-          document.getElementById('avg-legend').style.display =
-            (fmlDays.length > 0 || sldDays.length > 0) ? 'flex' : 'none';
         }
-      } else {
-        document.getElementById('avg-legend').style.display = 'none';
       }
 
       const ctx = document.getElementById('feed-chart').getContext('2d');
@@ -955,10 +951,11 @@
               if (hovered === 0 && fml) rows.push(`<span style="color:#4a9eff">●</span> Formula: <b>${fml}ml</b>`);
               if (hovered === 1 && sld) rows.push(`<span style="color:#ffcc00">●</span> Solid: <b>${sld}g</b>`);
               el.innerHTML = rows.join('<br>');
+              const cardRect = getChartCard().getBoundingClientRect();
               const pos = chart.canvas.getBoundingClientRect();
               el.style.opacity = '1';
-              el.style.left = (pos.left + tooltip.caretX + 12) + 'px';
-              el.style.top  = (pos.top  + tooltip.caretY - 10) + 'px';
+              el.style.left = (pos.left - cardRect.left + tooltip.caretX + 12) + 'px';
+              el.style.top  = (pos.top  - cardRect.top  + tooltip.caretY - 10) + 'px';
             }
           }},
           scales: {
