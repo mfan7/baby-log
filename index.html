@@ -191,7 +191,7 @@
       </div>
       <div class="chart-legend">
         <div class="legend-item"><div class="legend-dot" style="background:#4a9eff"></div>Formula (ml)</div>
-        <div class="legend-item"><div class="legend-dot" style="background:#34c759"></div>Solid (g)</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#ffcc00"></div>Solid (g)</div>
         <div class="legend-item" id="avg-legend" style="display:none">
           <div class="legend-dot" style="background:rgba(150,150,150,0.6)"></div>Avg by now
         </div>
@@ -690,28 +690,73 @@
     let weeksToShow    = 1;      // configurable in daily mode
     let chartAvgFml    = 0;      // avg formula by now (for plugin)
     let chartAvgSld    = 0;      // avg solid by now (for plugin)
+    let chartTodayFml  = 0;      // today's actual formula total
+    let chartTodaySld  = 0;      // today's actual solid total
     let chartTodayIdx  = -1;     // today's bar index (for plugin)
 
-    // Custom plugin: draw grey avg bars IN FRONT OF today's actual bars
+    // Custom plugin: draw grey avg bars + gap highlight on today's bar
     const avgBarPlugin = {
       id: 'avgBar',
       afterDatasetsDraw(chart) {
         if (chartMode !== 'week' || weeksToShow !== 1 || chartTodayIdx < 0 || (chartAvgFml === 0 && chartAvgSld === 0)) return;
-        const meta = chart.getDatasetMeta(0); // formula dataset (index 0 after removing avg datasets)
+        const meta = chart.getDatasetMeta(0);
         const bar  = meta.data[chartTodayIdx];
         if (!bar) return;
         const { ctx, scales: { y } } = chart;
         const x = bar.x, w = bar.width;
-        const y0      = y.getPixelForValue(0);
-        const yFml    = y.getPixelForValue(chartAvgFml);
-        const ySld    = y.getPixelForValue(chartAvgFml + chartAvgSld);
+        const y0   = y.getPixelForValue(0);
+        const avgTotal     = chartAvgFml + chartAvgSld;
+        const actualTotal  = chartTodayFml + chartTodaySld;
+        const yAvgTop      = y.getPixelForValue(avgTotal);
+        const yActualTop   = y.getPixelForValue(actualTotal);
+
         ctx.save();
-        ctx.fillStyle = 'rgba(180,180,180,0.45)'; // light grey = formula avg
-        ctx.beginPath(); ctx.roundRect(x - w/2, yFml, w, y0 - yFml, 4); ctx.fill();
-        if (chartAvgSld > 0) {
-          ctx.fillStyle = 'rgba(110,110,110,0.40)'; // dark grey = solid avg
-          ctx.beginPath(); ctx.roundRect(x - w/2, ySld, w, yFml - ySld, 4); ctx.fill();
+
+        // Grey avg bar (semi-transparent outline of avg total)
+        ctx.fillStyle = 'rgba(180,180,180,0.30)';
+        ctx.beginPath(); ctx.roundRect(x - w/2, yAvgTop, w, y0 - yAvgTop, 4); ctx.fill();
+
+        // Gap highlight between actual top and avg top
+        if (actualTotal !== avgTotal) {
+          const deficit = avgTotal - actualTotal; // positive = behind, negative = surplus
+          const gapTop    = Math.min(yActualTop, yAvgTop);
+          const gapBottom = Math.max(yActualTop, yAvgTop);
+          const gapH      = gapBottom - gapTop;
+
+          if (deficit > 0) {
+            // Deficit: actual < avg → red gap above actual bar
+            ctx.fillStyle = 'rgba(255,59,48,0.25)';
+            ctx.beginPath(); ctx.roundRect(x - w/2, gapTop, w, gapH, 4); ctx.fill();
+            // Red dashed avg line
+            ctx.strokeStyle = 'rgba(255,59,48,0.7)';
+            ctx.lineWidth = 1.5;
+            ctx.setLineDash([4, 3]);
+            ctx.beginPath(); ctx.moveTo(x - w/2, yAvgTop); ctx.lineTo(x + w/2, yAvgTop); ctx.stroke();
+            // Annotation
+            ctx.setLineDash([]);
+            ctx.fillStyle = 'rgba(255,59,48,0.90)';
+            ctx.font = 'bold 11px -apple-system, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(`−${deficit}ml`, x, gapTop - 5);
+          } else {
+            // Surplus: actual > avg → green gap above avg line
+            const surplus = -deficit;
+            ctx.fillStyle = 'rgba(52,199,89,0.25)';
+            ctx.beginPath(); ctx.roundRect(x - w/2, gapTop, w, gapH, 4); ctx.fill();
+            // Green dashed avg line
+            ctx.strokeStyle = 'rgba(52,199,89,0.8)';
+            ctx.lineWidth = 1.5;
+            ctx.setLineDash([4, 3]);
+            ctx.beginPath(); ctx.moveTo(x - w/2, yAvgTop); ctx.lineTo(x + w/2, yAvgTop); ctx.stroke();
+            // Annotation
+            ctx.setLineDash([]);
+            ctx.fillStyle = 'rgba(52,199,89,1.0)';
+            ctx.font = 'bold 11px -apple-system, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(`+${surplus}ml`, x, gapTop - 5);
+          }
         }
+
         ctx.restore();
       }
     };
@@ -811,6 +856,8 @@
       if (chartMode === 'week') {
         const todayKey = dateKey(new Date());
         chartTodayIdx  = days.findIndex(d => dateKey(d) === todayKey);
+        chartTodayFml  = chartTodayIdx >= 0 ? (formulaVals[chartTodayIdx] || 0) : 0;
+        chartTodaySld  = chartTodayIdx >= 0 ? (solidVals[chartTodayIdx]   || 0) : 0;
         if (chartTodayIdx >= 0) {
           const nowMinutes = new Date().getHours() * 60 + new Date().getMinutes();
           const pastSums = days
@@ -848,7 +895,7 @@
           labels,
           datasets: [
             { label: 'Formula (ml)', data: formulaVals, backgroundColor: '#4a9eff', borderRadius: 4, stack: 'feed' },
-            { label: 'Solid (g)',    data: solidVals,   backgroundColor: '#34c759', borderRadius: 4, stack: 'feed' },
+            { label: 'Solid (g)',    data: solidVals,   backgroundColor: '#ffcc00', borderRadius: 4, stack: 'feed' },
           ]
         },
         options: {
