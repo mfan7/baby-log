@@ -80,7 +80,7 @@
     /* Date toggle */
     .date-toggle { display: flex; gap: 0; border: 1.5px solid #e5e5ea; border-radius: 10px; overflow: hidden; }
     .date-toggle button { flex: 1; padding: 7px 0; border: none; background: white; font-size: 13px; font-weight: 600; color: #6e6e73; cursor: pointer; }
-    .date-toggle button.active { background: #1c1c1e; color: white; }
+    .date-toggle button.active { background: #007aff; color: white; }
     .recent-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
     .recent-header h2 { margin-bottom: 0; }
 
@@ -734,11 +734,11 @@
       document.getElementById('chart-empty').style.display = 'none';
 
       let labels, formulaVals, solidVals;
+      let days = [], totalDays = 0; // hoisted so grey avg block can access
 
       if (chartMode === 'week') {
         // Last N weeks as individual days
-        const totalDays = weeksToShow * 7;
-        const days = [];
+        totalDays = weeksToShow * 7;
         for (let i = totalDays - 1; i >= 0; i--) {
           const d = new Date(); d.setDate(d.getDate() - i); d.setHours(0,0,0,0);
           days.push(d);
