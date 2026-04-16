@@ -717,10 +717,11 @@
         let html = `<span style="color:#4a9eff">●</span> Formula: <b>${chartTodayFml}ml</b>`;
         if (chartAvgFml > 0) {
           const diff = chartTodayFml - chartAvgFml, abs = Math.abs(diff);
+          const pct = Math.round(abs / chartAvgFml * 100);
           html += '&ensp;' + (abs < 5
             ? `<span style="color:#888">on track</span>`
-            : diff < 0 ? `<span style="color:#ff3b30">−${abs}ml behind avg</span>`
-                       : `<span style="color:#34c759">+${abs}ml ahead of avg</span>`);
+            : diff < 0 ? `<span style="color:#ff3b30">${abs}ml behind avg (${pct}%)</span>`
+                       : `<span style="color:#34c759">${abs}ml ahead of avg (${pct}%)</span>`);
         }
         parts.push(html);
       }
@@ -728,10 +729,11 @@
         let html = `<span style="color:#ffcc00">●</span> Solid: <b>${chartTodaySld}g</b>`;
         if (chartAvgSld > 0) {
           const diff = chartTodaySld - chartAvgSld, abs = Math.abs(diff);
+          const pct = Math.round(abs / chartAvgSld * 100);
           html += '&ensp;' + (abs < 5
             ? `<span style="color:#888">on track</span>`
-            : diff < 0 ? `<span style="color:#ff3b30">−${abs}g behind avg</span>`
-                       : `<span style="color:#34c759">+${abs}g ahead of avg</span>`);
+            : diff < 0 ? `<span style="color:#ff3b30">${abs}g behind avg (${pct}%)</span>`
+                       : `<span style="color:#34c759">${abs}g ahead of avg (${pct}%)</span>`);
         }
         parts.push(html);
       }
@@ -922,10 +924,11 @@
                 let html = dateLabel + `<span style="color:#4a9eff">●</span> <b>Formula: ${fml}ml</b>`;
                 if (isToday && chartAvgFml > 0) {
                   const diff = chartTodayFml - chartAvgFml, abs = Math.abs(diff);
+                  const pct = Math.round(abs / chartAvgFml * 100);
                   const tag = abs < 5
                     ? `<span style="color:#888">on track</span>`
-                    : diff < 0 ? `<span style="color:#ff3b30">${abs}ml behind avg</span>`
-                               : `<span style="color:#34c759">${abs}ml ahead of avg</span>`;
+                    : diff < 0 ? `<span style="color:#ff3b30">${abs}ml behind avg (${pct}%)</span>`
+                               : `<span style="color:#34c759">${abs}ml ahead of avg (${pct}%)</span>`;
                   html += `&ensp;·&ensp;Avg by now: ${chartAvgFml}ml&ensp;${tag}`;
                 }
                 setChartInfo(html);
@@ -933,10 +936,11 @@
                 let html = dateLabel + `<span style="color:#ffcc00">●</span> <b>Solid: ${sld}g</b>`;
                 if (isToday && chartAvgSld > 0) {
                   const diff = chartTodaySld - chartAvgSld, abs = Math.abs(diff);
+                  const pct = Math.round(abs / chartAvgSld * 100);
                   const tag = abs < 5
                     ? `<span style="color:#888">on track</span>`
-                    : diff < 0 ? `<span style="color:#ff3b30">${abs}g behind avg</span>`
-                               : `<span style="color:#34c759">${abs}g ahead of avg</span>`;
+                    : diff < 0 ? `<span style="color:#ff3b30">${abs}g behind avg (${pct}%)</span>`
+                               : `<span style="color:#34c759">${abs}g ahead of avg (${pct}%)</span>`;
                   html += `&ensp;·&ensp;Avg by now: ${chartAvgSld}g&ensp;${tag}`;
                 }
                 setChartInfo(html);
