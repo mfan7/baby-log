@@ -694,7 +694,7 @@
     let chartTodaySld  = 0;      // today's actual solid total
     let chartTodayIdx  = -1;     // today's bar index (for plugin)
 
-    // Custom plugin: draw grey avg bars + gap highlight on today's bar
+    // Custom plugin: draw grey avg outline + independent formula/solid gap highlights
     const avgBarPlugin = {
       id: 'avgBar',
       afterDatasetsDraw(chart) {
@@ -704,56 +704,64 @@
         if (!bar) return;
         const { ctx, scales: { y } } = chart;
         const x = bar.x, w = bar.width;
-        const y0   = y.getPixelForValue(0);
-        const avgTotal     = chartAvgFml + chartAvgSld;
-        const actualTotal  = chartTodayFml + chartTodaySld;
-        const yAvgTop      = y.getPixelForValue(avgTotal);
-        const yActualTop   = y.getPixelForValue(actualTotal);
+        const y0 = y.getPixelForValue(0);
 
         ctx.save();
 
-        // Grey avg bar (semi-transparent outline of avg total)
-        ctx.fillStyle = 'rgba(180,180,180,0.30)';
-        ctx.beginPath(); ctx.roundRect(x - w/2, yAvgTop, w, y0 - yAvgTop, 4); ctx.fill();
+        // Grey avg outline (combined avg height as reference backdrop)
+        const yAvgCombined = y.getPixelForValue(chartAvgFml + chartAvgSld);
+        ctx.fillStyle = 'rgba(180,180,180,0.18)';
+        ctx.beginPath(); ctx.roundRect(x - w/2, yAvgCombined, w, y0 - yAvgCombined, 4); ctx.fill();
 
-        // Gap highlight between actual top and avg top
-        if (actualTotal !== avgTotal) {
-          const deficit = avgTotal - actualTotal; // positive = behind, negative = surplus
-          const gapTop    = Math.min(yActualTop, yAvgTop);
-          const gapBottom = Math.max(yActualTop, yAvgTop);
-          const gapH      = gapBottom - gapTop;
+        // Helper: draw a gap zone + dashed line + annotation for one track
+        function drawGap(actualVal, avgVal, unit, labelY) {
+          const diff = avgVal - actualVal; // positive = deficit, negative = surplus
+          if (Math.abs(diff) < 5) return; // skip noise < 5 units
+          const yActual = y.getPixelForValue(actualVal);
+          const yAvg    = y.getPixelForValue(avgVal);
+          const gapTop    = Math.min(yActual, yAvg);
+          const gapBottom = Math.max(yActual, yAvg);
+          const isDeficit = diff > 0;
+          const color     = isDeficit ? '255,59,48' : '52,199,89';
+          // Gap fill
+          ctx.fillStyle = `rgba(${color},0.22)`;
+          ctx.beginPath(); ctx.roundRect(x - w/2, gapTop, w, gapBottom - gapTop, 3); ctx.fill();
+          // Dashed avg line
+          ctx.strokeStyle = `rgba(${color},0.75)`;
+          ctx.lineWidth = 1.5; ctx.setLineDash([4, 3]);
+          ctx.beginPath(); ctx.moveTo(x - w/2, yAvg); ctx.lineTo(x + w/2, yAvg); ctx.stroke();
+          ctx.setLineDash([]);
+          // Annotation label
+          ctx.fillStyle = `rgba(${color},0.95)`;
+          ctx.font = 'bold 10px -apple-system, sans-serif';
+          ctx.textAlign = 'center';
+          const sign = isDeficit ? '−' : '+';
+          ctx.fillText(`${sign}${Math.abs(diff)}${unit}`, x, labelY);
+        }
 
-          if (deficit > 0) {
-            // Deficit: actual < avg → red gap above actual bar
-            ctx.fillStyle = 'rgba(255,59,48,0.25)';
-            ctx.beginPath(); ctx.roundRect(x - w/2, gapTop, w, gapH, 4); ctx.fill();
-            // Red dashed avg line
-            ctx.strokeStyle = 'rgba(255,59,48,0.7)';
-            ctx.lineWidth = 1.5;
-            ctx.setLineDash([4, 3]);
-            ctx.beginPath(); ctx.moveTo(x - w/2, yAvgTop); ctx.lineTo(x + w/2, yAvgTop); ctx.stroke();
-            // Annotation
-            ctx.setLineDash([]);
-            ctx.fillStyle = 'rgba(255,59,48,0.90)';
-            ctx.font = 'bold 11px -apple-system, sans-serif';
-            ctx.textAlign = 'center';
-            ctx.fillText(`−${deficit}ml`, x, gapTop - 5);
-          } else {
-            // Surplus: actual > avg → green gap above avg line
-            const surplus = -deficit;
-            ctx.fillStyle = 'rgba(52,199,89,0.25)';
-            ctx.beginPath(); ctx.roundRect(x - w/2, gapTop, w, gapH, 4); ctx.fill();
-            // Green dashed avg line
-            ctx.strokeStyle = 'rgba(52,199,89,0.8)';
-            ctx.lineWidth = 1.5;
-            ctx.setLineDash([4, 3]);
-            ctx.beginPath(); ctx.moveTo(x - w/2, yAvgTop); ctx.lineTo(x + w/2, yAvgTop); ctx.stroke();
-            // Annotation
-            ctx.setLineDash([]);
-            ctx.fillStyle = 'rgba(52,199,89,1.0)';
-            ctx.font = 'bold 11px -apple-system, sans-serif';
-            ctx.textAlign = 'center';
-            ctx.fillText(`+${surplus}ml`, x, gapTop - 5);
+        // ── Formula gap (always shown when avgFml > 0) ──
+        let fmlLabelY = null;
+        if (chartAvgFml > 0) {
+          const fmlDiff = chartAvgFml - chartTodayFml;
+          if (Math.abs(fmlDiff) >= 5) {
+            const yActualFml = y.getPixelForValue(chartTodayFml);
+            const yAvgFml    = y.getPixelForValue(chartAvgFml);
+            fmlLabelY = Math.min(yActualFml, yAvgFml) - 5;
+            drawGap(chartTodayFml, chartAvgFml, 'ml', fmlLabelY);
+          }
+        }
+
+        // ── Solid gap (only when avgSld > 0 — no comparison without history) ──
+        if (chartAvgSld > 0) {
+          const combinedActual = chartTodayFml + chartTodaySld;
+          const combinedAvg    = chartAvgFml + chartAvgSld;
+          const sldDiff = chartAvgSld - chartTodaySld;
+          if (Math.abs(sldDiff) >= 5) {
+            const yActualCombined = y.getPixelForValue(combinedActual);
+            const yAvgCombined2   = y.getPixelForValue(combinedAvg);
+            // Stack solid label above formula label if both exist
+            const sldLabelY = Math.min(yActualCombined, yAvgCombined2) - (fmlLabelY !== null ? 16 : 5);
+            drawGap(combinedActual, combinedAvg, 'g', sldLabelY);
           }
         }
 
@@ -913,8 +921,16 @@
                 const idx = items[0].dataIndex;
                 if (idx !== chartTodayIdx || (chartAvgFml === 0 && chartAvgSld === 0)) return [];
                 const lines = [];
-                if (chartAvgFml > 0) lines.push(`Avg formula by now: ${chartAvgFml}ml`);
-                if (chartAvgSld > 0) lines.push(`Avg solid by now: ${chartAvgSld}g`);
+                if (chartAvgFml > 0) {
+                  const d = chartAvgFml - chartTodayFml;
+                  const tag = Math.abs(d) < 5 ? 'on track' : (d > 0 ? `−${d}ml` : `+${Math.abs(d)}ml`);
+                  lines.push(`Formula avg: ${chartAvgFml}ml (${tag})`);
+                }
+                if (chartAvgSld > 0) {
+                  const d = chartAvgSld - chartTodaySld;
+                  const tag = Math.abs(d) < 5 ? 'on track' : (d > 0 ? `−${d}g` : `+${Math.abs(d)}g`);
+                  lines.push(`Solid avg: ${chartAvgSld}g (${tag})`);
+                }
                 return lines;
               }
             }
