@@ -939,9 +939,6 @@
               const fml     = dp.find(d => d.datasetIndex === 0)?.parsed.y || 0;
               const sld     = dp.find(d => d.datasetIndex === 1)?.parsed.y || 0;
               const idx     = dp[0]?.dataIndex;
-              const isToday = chartMode === 'week' && weeksToShow === 1 && idx === chartTodayIdx;
-              // Today's bar: dots handle the tooltip — suppress bar hover
-              if (isToday) { el.style.opacity = '0'; return; }
               const rows = [];
               if (hovered === 0 && fml) rows.push(`<span style="color:#4a9eff">●</span> Formula: <b>${fml}ml</b>`);
               if (hovered === 1 && sld) rows.push(`<span style="color:#ffcc00">●</span> Solid: <b>${sld}g</b>`);
