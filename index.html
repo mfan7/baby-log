@@ -691,39 +691,33 @@
     let chartTodayFml  = 0;      // today's actual formula total
     let chartTodaySld  = 0;      // today's actual solid total
     let chartTodayIdx  = -1;     // today's bar index (for plugin)
-    let chartDots      = [];     // [{x, y, type}] dot positions set by plugin
 
-    // Custom plugin: colored status dots above today's bar (red=deficit, green=surplus, grey=on track)
+    // Plugin: transparent color overlay on today's formula/solid bars
     const avgBarPlugin = {
       id: 'avgBar',
       afterDatasetsDraw(chart) {
-        if (chartMode !== 'week' || weeksToShow !== 1 || chartTodayIdx < 0 || (chartAvgFml === 0 && chartAvgSld === 0)) return;
-        const meta = chart.getDatasetMeta(0);
-        const bar  = meta.data[chartTodayIdx];
-        if (!bar) return;
-        const { ctx } = chart;
-        const x    = bar.x;
-        const yTop = chart.chartArea.top + 7;
-        const dots = [];
-        if (chartAvgFml > 0) {
-          const diff = chartTodayFml - chartAvgFml;
-          dots.push(Math.abs(diff) < 5 ? 'rgba(150,150,150,0.6)' : diff < 0 ? 'rgba(255,59,48,0.85)' : 'rgba(52,199,89,0.85)');
-        }
-        if (chartAvgSld > 0) {
-          const diff = chartTodaySld - chartAvgSld;
-          dots.push(Math.abs(diff) < 5 ? 'rgba(150,150,150,0.6)' : diff < 0 ? 'rgba(255,59,48,0.85)' : 'rgba(52,199,89,0.85)');
-        }
+        if (chartMode !== 'week' || weeksToShow !== 1 || chartTodayIdx < 0) return;
+        const { ctx, scales: { y } } = chart;
         ctx.save();
-        chartDots = [];
-        const startX = x - ((dots.length - 1) * 10) / 2;
-        dots.forEach((color, i) => {
-          const dx = startX + i * 10;
-          ctx.beginPath();
-          ctx.arc(dx, yTop, 4, 0, Math.PI * 2);
+        const y0 = y.getPixelForValue(0);
+
+        function drawOverlay(datasetIdx, actual, avg) {
+          if (avg === 0) return;
+          const bar = chart.getDatasetMeta(datasetIdx).data[chartTodayIdx];
+          if (!bar) return;
+          const diff = actual - avg;
+          const color = Math.abs(diff) < 5
+            ? 'rgba(150,150,150,0.28)'
+            : diff < 0 ? 'rgba(255,59,48,0.28)' : 'rgba(52,199,89,0.28)';
+          const yTop = y.getPixelForValue(actual);
           ctx.fillStyle = color;
+          ctx.beginPath();
+          ctx.roundRect(bar.x - bar.width / 2, yTop, bar.width, y0 - yTop, 4);
           ctx.fill();
-          chartDots.push({ x: dx, y: yTop, type: i === 0 ? 'formula' : 'solid' });
-        });
+        }
+
+        drawOverlay(0, chartTodayFml, chartAvgFml);
+        drawOverlay(1, chartTodaySld, chartAvgSld);
         ctx.restore();
       }
     };
@@ -739,41 +733,6 @@
 
     function clearChartInfo() { setChartInfo(''); }
 
-    function dotInfoHtml(type) {
-      if (type === 'formula') {
-        let html = `<span style="color:#4a9eff">●</span> <b>Formula today: ${chartTodayFml}ml</b>`;
-        if (chartAvgFml > 0) {
-          const diff = chartTodayFml - chartAvgFml, abs = Math.abs(diff);
-          const tag = abs < 5
-            ? `<span style="color:#888">on track</span>`
-            : diff < 0 ? `<span style="color:#ff3b30">−${abs}ml behind avg</span>`
-                       : `<span style="color:#34c759">+${abs}ml ahead of avg</span>`;
-          html += `&ensp;·&ensp;Avg by now: ${chartAvgFml}ml&ensp;${tag}`;
-        }
-        return html;
-      } else {
-        let html = `<span style="color:#ffcc00">●</span> <b>Solid today: ${chartTodaySld}g</b>`;
-        if (chartAvgSld > 0) {
-          const diff = chartTodaySld - chartAvgSld, abs = Math.abs(diff);
-          const tag = abs < 5
-            ? `<span style="color:#888">on track</span>`
-            : diff < 0 ? `<span style="color:#ff3b30">−${abs}g behind avg</span>`
-                       : `<span style="color:#34c759">+${abs}g ahead of avg</span>`;
-          html += `&ensp;·&ensp;Avg by now: ${chartAvgSld}g&ensp;${tag}`;
-        }
-        return html;
-      }
-    }
-
-    // Wire up dot + bar hover on canvas (persists across chart redraws)
-    document.getElementById('feed-chart').addEventListener('mousemove', e => {
-      const rect = e.currentTarget.getBoundingClientRect();
-      const mx = e.clientX - rect.left, my = e.clientY - rect.top;
-      const hit = chartDots.find(d => Math.hypot(mx - d.x, my - d.y) <= 8);
-      e.currentTarget.style.cursor = hit ? 'pointer' : '';
-      if (hit) setChartInfo(dotInfoHtml(hit.type));
-      // bar hover info is set by Chart.js external callback below
-    });
     document.getElementById('feed-chart').addEventListener('mouseleave', clearChartInfo);
 
     function setChartMode(mode) {
@@ -905,8 +864,8 @@
         data: {
           labels,
           datasets: [
-            { label: 'Formula (ml)', data: formulaVals, backgroundColor: '#4a9eff', borderRadius: 4, stack: 'feed' },
-            { label: 'Solid (g)',    data: solidVals,   backgroundColor: '#ffcc00', borderRadius: 4, stack: 'feed' },
+            { label: 'Formula (ml)', data: formulaVals, backgroundColor: '#4a9eff', borderRadius: 4 },
+            { label: 'Solid (g)',    data: solidVals,   backgroundColor: '#ffcc00', borderRadius: 4 },
           ]
         },
         options: {
@@ -917,15 +876,38 @@
               if (!tooltip.opacity) { clearChartInfo(); return; }
               const dp      = tooltip.dataPoints || [];
               const hovered = dp[0]?.datasetIndex;
+              const idx     = dp[0]?.dataIndex;
+              const isToday = chartMode === 'week' && weeksToShow === 1 && idx === chartTodayIdx;
               const fml     = dp.find(d => d.datasetIndex === 0)?.parsed.y || 0;
               const sld     = dp.find(d => d.datasetIndex === 1)?.parsed.y || 0;
-              if (hovered === 0 && fml) setChartInfo(`<span style="color:#4a9eff">●</span> <b>Formula: ${fml}ml</b>`);
-              else if (hovered === 1 && sld) setChartInfo(`<span style="color:#ffcc00">●</span> <b>Solid: ${sld}g</b>`);
+              if (hovered === 0) {
+                let html = `<span style="color:#4a9eff">●</span> <b>Formula: ${fml}ml</b>`;
+                if (isToday && chartAvgFml > 0) {
+                  const diff = chartTodayFml - chartAvgFml, abs = Math.abs(diff);
+                  const tag = abs < 5
+                    ? `<span style="color:#888">on track</span>`
+                    : diff < 0 ? `<span style="color:#ff3b30">−${abs}ml behind avg</span>`
+                               : `<span style="color:#34c759">+${abs}ml ahead of avg</span>`;
+                  html += `&ensp;·&ensp;Avg by now: ${chartAvgFml}ml&ensp;${tag}`;
+                }
+                setChartInfo(html);
+              } else if (hovered === 1) {
+                let html = `<span style="color:#ffcc00">●</span> <b>Solid: ${sld}g</b>`;
+                if (isToday && chartAvgSld > 0) {
+                  const diff = chartTodaySld - chartAvgSld, abs = Math.abs(diff);
+                  const tag = abs < 5
+                    ? `<span style="color:#888">on track</span>`
+                    : diff < 0 ? `<span style="color:#ff3b30">−${abs}g behind avg</span>`
+                               : `<span style="color:#34c759">+${abs}g ahead of avg</span>`;
+                  html += `&ensp;·&ensp;Avg by now: ${chartAvgSld}g&ensp;${tag}`;
+                }
+                setChartInfo(html);
+              }
             }
           }},
           scales: {
-            x: { stacked: true, grid: { display: false }, ticks: { font: { size: 11 }, maxRotation: 45 } },
-            y: { stacked: true, grid: { color: '#f2f2f7' }, ticks: { font: { size: 11 } },
+            x: { grid: { display: false }, ticks: { font: { size: 11 }, maxRotation: 45 } },
+            y: { grid: { color: '#f2f2f7' }, ticks: { font: { size: 11 } },
                  title: { display: true, text: 'ml / g', font: { size: 10 }, color: '#aeaeb2' } }
           }
         }
