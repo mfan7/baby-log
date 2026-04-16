@@ -693,6 +693,7 @@
     let chartTodayFml  = 0;      // today's actual formula total
     let chartTodaySld  = 0;      // today's actual solid total
     let chartTodayIdx  = -1;     // today's bar index (for plugin)
+    let chartDots      = [];     // [{x, y, type}] dot positions set by plugin
 
     // Custom plugin: colored status dots above today's bar (red=deficit, green=surplus, grey=on track)
     const avgBarPlugin = {
@@ -715,16 +716,79 @@
           dots.push(Math.abs(diff) < 5 ? 'rgba(150,150,150,0.6)' : diff < 0 ? 'rgba(255,59,48,0.85)' : 'rgba(52,199,89,0.85)');
         }
         ctx.save();
+        chartDots = [];
         const startX = x - ((dots.length - 1) * 10) / 2;
         dots.forEach((color, i) => {
+          const dx = startX + i * 10;
           ctx.beginPath();
-          ctx.arc(startX + i * 10, yTop, 4, 0, Math.PI * 2);
+          ctx.arc(dx, yTop, 4, 0, Math.PI * 2);
           ctx.fillStyle = color;
           ctx.fill();
+          chartDots.push({ x: dx, y: yTop, type: i === 0 ? 'formula' : 'solid' });
         });
         ctx.restore();
       }
     };
+
+    // ── Dot hover tooltip ─────────────────────────────────────────────────────
+
+    function getOrCreateTooltip() {
+      let el = document.getElementById('chart-tooltip');
+      if (!el) {
+        el = document.createElement('div');
+        el.id = 'chart-tooltip';
+        el.style.cssText = 'position:fixed;background:rgba(28,28,30,0.88);color:#fff;border-radius:10px;padding:8px 12px;font-size:12px;line-height:1.7;pointer-events:none;white-space:nowrap;z-index:999;backdrop-filter:blur(4px);transition:opacity .1s;';
+        document.body.appendChild(el);
+      }
+      return el;
+    }
+
+    function showDotTooltip(clientX, clientY, type) {
+      const el   = getOrCreateTooltip();
+      const rows = [];
+      if (type === 'formula') {
+        rows.push(`<span style="color:#4a9eff">●</span> Formula today: <b>${chartTodayFml}ml</b>`);
+        if (chartAvgFml > 0) {
+          const diff = chartTodayFml - chartAvgFml, abs = Math.abs(diff);
+          const tag = abs < 5 ? `<span style="color:#aaa">on track</span>`
+            : diff < 0 ? `<span style="color:#ff3b30"><b>−${abs}ml</b></span>`
+                       : `<span style="color:#34c759"><b>+${abs}ml</b></span>`;
+          rows.push(`<span style="color:#aaa;font-size:11px">Avg by now: ${chartAvgFml}ml &nbsp;${tag}</span>`);
+        }
+      } else {
+        rows.push(`<span style="color:#ffcc00">●</span> Solid today: <b>${chartTodaySld}g</b>`);
+        if (chartAvgSld > 0) {
+          const diff = chartTodaySld - chartAvgSld, abs = Math.abs(diff);
+          const tag = abs < 5 ? `<span style="color:#aaa">on track</span>`
+            : diff < 0 ? `<span style="color:#ff3b30"><b>−${abs}g</b></span>`
+                       : `<span style="color:#34c759"><b>+${abs}g</b></span>`;
+          rows.push(`<span style="color:#aaa;font-size:11px">Avg by now: ${chartAvgSld}g &nbsp;${tag}</span>`);
+        }
+      }
+      el.innerHTML = rows.join('<br>');
+      el.style.opacity = '1';
+      el.style.left = (clientX + 12) + 'px';
+      el.style.top  = (clientY - 10) + 'px';
+    }
+
+    // Wire up dot hover once (canvas element persists across chart redraws)
+    document.getElementById('feed-chart').addEventListener('mousemove', e => {
+      const rect = e.currentTarget.getBoundingClientRect();
+      const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+      const hit = chartDots.find(d => Math.hypot(mx - d.x, my - d.y) <= 8);
+      if (hit) {
+        e.currentTarget.style.cursor = 'pointer';
+        showDotTooltip(e.clientX, e.clientY, hit.type);
+      } else {
+        e.currentTarget.style.cursor = '';
+        const el = document.getElementById('chart-tooltip');
+        if (el) el.style.opacity = '0';
+      }
+    });
+    document.getElementById('feed-chart').addEventListener('mouseleave', () => {
+      const el = document.getElementById('chart-tooltip');
+      if (el) el.style.opacity = '0';
+    });
 
     function setChartMode(mode) {
       chartMode = mode;
@@ -868,46 +932,19 @@
           plugins: { legend: { display: false }, avgBar: {}, tooltip: {
             enabled: false,
             external({ chart, tooltip }) {
-              let el = document.getElementById('chart-tooltip');
-              if (!el) {
-                el = document.createElement('div');
-                el.id = 'chart-tooltip';
-                el.style.cssText = 'position:fixed;background:rgba(28,28,30,0.88);color:#fff;border-radius:10px;padding:8px 12px;font-size:12px;line-height:1.7;pointer-events:none;white-space:nowrap;z-index:999;backdrop-filter:blur(4px);transition:opacity .1s;';
-                document.body.appendChild(el);
-              }
+              const el = getOrCreateTooltip();
               if (!tooltip.opacity) { el.style.opacity = '0'; return; }
-              const dp        = tooltip.dataPoints || [];
-              const hovered   = dp[0]?.datasetIndex; // 0 = formula segment, 1 = solid segment
-              const fml       = dp.find(d => d.datasetIndex === 0)?.parsed.y || 0;
-              const sld       = dp.find(d => d.datasetIndex === 1)?.parsed.y || 0;
-              const idx       = dp[0]?.dataIndex;
-              const isToday   = chartMode === 'week' && weeksToShow === 1 && idx === chartTodayIdx;
+              const dp      = tooltip.dataPoints || [];
+              const hovered = dp[0]?.datasetIndex;
+              const fml     = dp.find(d => d.datasetIndex === 0)?.parsed.y || 0;
+              const sld     = dp.find(d => d.datasetIndex === 1)?.parsed.y || 0;
+              const idx     = dp[0]?.dataIndex;
+              const isToday = chartMode === 'week' && weeksToShow === 1 && idx === chartTodayIdx;
+              // Today's bar: dots handle the tooltip — suppress bar hover
+              if (isToday) { el.style.opacity = '0'; return; }
               const rows = [];
-              if (hovered === 0) {
-                rows.push(`<span style="color:#4a9eff">●</span> Formula: <b>${fml}ml</b>`);
-                if (isToday && chartAvgFml > 0) {
-                  const diff = chartTodayFml - chartAvgFml;
-                  const abs  = Math.abs(diff);
-                  const tag  = abs < 5
-                    ? `<span style="color:#aaa">on track</span>`
-                    : diff < 0
-                      ? `<span style="color:#ff3b30"><b>−${abs}ml</b></span>`
-                      : `<span style="color:#34c759"><b>+${abs}ml</b></span>`;
-                  rows.push(`<span style="color:#aaa;font-size:11px">Avg by now: ${chartAvgFml}ml &nbsp;${tag}</span>`);
-                }
-              } else {
-                rows.push(`<span style="color:#ffcc00">●</span> Solid: <b>${sld}g</b>`);
-                if (isToday && chartAvgSld > 0) {
-                  const diff = chartTodaySld - chartAvgSld;
-                  const abs  = Math.abs(diff);
-                  const tag  = abs < 5
-                    ? `<span style="color:#aaa">on track</span>`
-                    : diff < 0
-                      ? `<span style="color:#ff3b30"><b>−${abs}g</b></span>`
-                      : `<span style="color:#34c759"><b>+${abs}g</b></span>`;
-                  rows.push(`<span style="color:#aaa;font-size:11px">Avg by now: ${chartAvgSld}g &nbsp;${tag}</span>`);
-                }
-              }
+              if (hovered === 0 && fml) rows.push(`<span style="color:#4a9eff">●</span> Formula: <b>${fml}ml</b>`);
+              if (hovered === 1 && sld) rows.push(`<span style="color:#ffcc00">●</span> Solid: <b>${sld}g</b>`);
               el.innerHTML = rows.join('<br>');
               const pos = chart.canvas.getBoundingClientRect();
               el.style.opacity = '1';
