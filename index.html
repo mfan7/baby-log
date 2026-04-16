@@ -692,10 +692,10 @@
     let chartAvgSld    = 0;      // avg solid by now (for plugin)
     let chartTodayIdx  = -1;     // today's bar index (for plugin)
 
-    // Custom plugin: draw grey avg bars BEHIND today's actual bars
+    // Custom plugin: draw grey avg bars IN FRONT OF today's actual bars
     const avgBarPlugin = {
       id: 'avgBar',
-      beforeDatasetsDraw(chart) {
+      afterDatasetsDraw(chart) {
         if (chartMode !== 'week' || chartTodayIdx < 0 || (chartAvgFml === 0 && chartAvgSld === 0)) return;
         const meta = chart.getDatasetMeta(0); // formula dataset (index 0 after removing avg datasets)
         const bar  = meta.data[chartTodayIdx];
@@ -1009,9 +1009,9 @@
     // ── Toast ─────────────────────────────────────────────────────────────────
 
     function refreshAll() {
+      setLogDate(0); // always reset to today's log view before refreshing
       loadStats();
       loadChart();
-      loadRecent();
       showToast('Refreshed');
     }
 
