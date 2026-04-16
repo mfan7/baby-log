@@ -694,7 +694,7 @@
     let chartTodaySld  = 0;      // today's actual solid total
     let chartTodayIdx  = -1;     // today's bar index (for plugin)
 
-    // Custom plugin: draw grey avg outline on today's bar only
+    // Custom plugin: thin tick marks at avg levels on today's bar
     const avgBarPlugin = {
       id: 'avgBar',
       afterDatasetsDraw(chart) {
@@ -704,11 +704,16 @@
         if (!bar) return;
         const { ctx, scales: { y } } = chart;
         const x = bar.x, w = bar.width;
-        const y0 = y.getPixelForValue(0);
         ctx.save();
-        const yAvgTop = y.getPixelForValue(chartAvgFml + chartAvgSld);
-        ctx.fillStyle = 'rgba(180,180,180,0.25)';
-        ctx.beginPath(); ctx.roundRect(x - w/2, yAvgTop, w, y0 - yAvgTop, 4); ctx.fill();
+        ctx.fillStyle = 'rgba(140,140,140,0.75)';
+        if (chartAvgFml > 0) {
+          const yFml = y.getPixelForValue(chartAvgFml);
+          ctx.beginPath(); ctx.roundRect(x - w/2, yFml - 1.5, w, 3, 1); ctx.fill();
+        }
+        if (chartAvgSld > 0) {
+          const yCombined = y.getPixelForValue(chartAvgFml + chartAvgSld);
+          ctx.beginPath(); ctx.roundRect(x - w/2, yCombined - 1.5, w, 3, 1); ctx.fill();
+        }
         ctx.restore();
       }
     };
