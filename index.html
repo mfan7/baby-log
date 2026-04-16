@@ -686,7 +686,7 @@
     // Gap color thresholds — tweak these to adjust sensitivity
     const GAP_ON_TRACK_ML = 5;  // ml — below this = "on track" (no color change)
     const GAP_ON_TRACK_G  = 5;  // g
-    const GAP_MAX_STEPS   = 5;  // intensity steps; step size = avg / GAP_MAX_STEPS
+    const GAP_MAX_STEPS   = 10;  // intensity steps; step size = avg / GAP_MAX_STEPS
                                 // so full intensity is reached when gap ≈ daily avg
 
     let feedChart      = null;
