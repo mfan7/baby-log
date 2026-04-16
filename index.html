@@ -803,7 +803,8 @@
         chartTodayIdx  = days.findIndex(d => dateKey(d) === todayKey);
         chartTodayFml  = chartTodayIdx >= 0 ? (formulaVals[chartTodayIdx] || 0) : 0;
         chartTodaySld  = chartTodayIdx >= 0 ? (solidVals[chartTodayIdx]   || 0) : 0;
-        if (chartTodayIdx >= 0) {
+        // Avg only computed for last-1-week view; 2+ weeks shows plain colors
+        if (weeksToShow === 1 && chartTodayIdx >= 0) {
           const nowMinutes = new Date().getHours() * 60 + new Date().getMinutes();
           const pastSums = days
             .filter((_, i) => i !== chartTodayIdx)
@@ -818,8 +819,6 @@
                 g:  entries.reduce((s, r) => s + (r.amount_g  || 0), 0),
               };
             });
-
-          // Separate denominators: a formula-only day must not inflate the solid avg
           const fmlDays = pastSums.filter(s => s.ml > 0);
           const sldDays = pastSums.filter(s => s.g  > 0);
           chartAvgFml = fmlDays.length > 0 ? Math.round(fmlDays.reduce((s, d) => s + d.ml, 0) / fmlDays.length) : 0;
@@ -830,10 +829,11 @@
       // Per-bar colors: today's bar reflects gap status, all others use base color
       const gapColor = (diff, base) =>
         Math.abs(diff) < 5 ? base : diff < 0 ? 'rgba(255,59,48,0.55)' : 'rgba(52,199,89,0.55)';
+      const showGap = weeksToShow === 1;
       const fmlColors = formulaVals.map((_, i) =>
-        (i === chartTodayIdx && chartAvgFml > 0) ? gapColor(chartTodayFml - chartAvgFml, '#4a9eff') : '#4a9eff');
+        (showGap && i === chartTodayIdx && chartAvgFml > 0) ? gapColor(chartTodayFml - chartAvgFml, '#4a9eff') : '#4a9eff');
       const sldColors = solidVals.map((_, i) =>
-        (i === chartTodayIdx && chartAvgSld > 0) ? gapColor(chartTodaySld - chartAvgSld, '#ffcc00') : '#ffcc00');
+        (showGap && i === chartTodayIdx && chartAvgSld > 0) ? gapColor(chartTodaySld - chartAvgSld, '#ffcc00') : '#ffcc00');
 
       const ctx = document.getElementById('feed-chart').getContext('2d');
       if (feedChart) feedChart.destroy();
