@@ -696,7 +696,7 @@
     const avgBarPlugin = {
       id: 'avgBar',
       afterDatasetsDraw(chart) {
-        if (chartMode !== 'week' || chartTodayIdx < 0 || (chartAvgFml === 0 && chartAvgSld === 0)) return;
+        if (chartMode !== 'week' || weeksToShow !== 1 || chartTodayIdx < 0 || (chartAvgFml === 0 && chartAvgSld === 0)) return;
         const meta = chart.getDatasetMeta(0); // formula dataset (index 0 after removing avg datasets)
         const bar  = meta.data[chartTodayIdx];
         if (!bar) return;
@@ -862,7 +862,7 @@
                 return ctx.datasetIndex === 0 ? `Formula: ${v}ml` : `Solid: ${v}g`;
               },
               afterBody: (items) => {
-                if (chartMode !== 'week' || !items.length) return [];
+                if (chartMode !== 'week' || weeksToShow !== 1 || !items.length) return [];
                 const idx = items[0].dataIndex;
                 if (idx !== chartTodayIdx || (chartAvgFml === 0 && chartAvgSld === 0)) return [];
                 const lines = [];
