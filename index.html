@@ -730,7 +730,9 @@
       }
     };
 
-    // ── Dot hover tooltip ─────────────────────────────────────────────────────
+    // ── Tooltips: separate elements for bar hover vs dot hover ────────────────
+    // #chart-tooltip   → Chart.js external (bar amounts)
+    // #chart-dot-tip   → manual mousemove (dot avg/gap context)
 
     function getOrCreateTooltip() {
       let el = document.getElementById('chart-tooltip');
@@ -743,8 +745,19 @@
       return el;
     }
 
+    function getOrCreateDotTip() {
+      let el = document.getElementById('chart-dot-tip');
+      if (!el) {
+        el = document.createElement('div');
+        el.id = 'chart-dot-tip';
+        el.style.cssText = 'position:fixed;background:rgba(28,28,30,0.88);color:#fff;border-radius:10px;padding:8px 12px;font-size:12px;line-height:1.7;pointer-events:none;white-space:nowrap;z-index:1000;backdrop-filter:blur(4px);transition:opacity .1s;opacity:0;';
+        document.body.appendChild(el);
+      }
+      return el;
+    }
+
     function showDotTooltip(clientX, clientY, type) {
-      const el   = getOrCreateTooltip();
+      const el   = getOrCreateDotTip();
       const rows = [];
       if (type === 'formula') {
         rows.push(`<span style="color:#4a9eff">●</span> Formula today: <b>${chartTodayFml}ml</b>`);
@@ -776,18 +789,17 @@
       const rect = e.currentTarget.getBoundingClientRect();
       const mx = e.clientX - rect.left, my = e.clientY - rect.top;
       const hit = chartDots.find(d => Math.hypot(mx - d.x, my - d.y) <= 8);
+      const dotTip = getOrCreateDotTip();
       if (hit) {
         e.currentTarget.style.cursor = 'pointer';
         showDotTooltip(e.clientX, e.clientY, hit.type);
       } else {
         e.currentTarget.style.cursor = '';
-        const el = document.getElementById('chart-tooltip');
-        if (el) el.style.opacity = '0';
+        dotTip.style.opacity = '0'; // hide dot tip only; bar tip managed by Chart.js
       }
     });
     document.getElementById('feed-chart').addEventListener('mouseleave', () => {
-      const el = document.getElementById('chart-tooltip');
-      if (el) el.style.opacity = '0';
+      getOrCreateDotTip().style.opacity = '0';
     });
 
     function setChartMode(mode) {
