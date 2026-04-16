@@ -828,9 +828,14 @@
           responsive: true,
           plugins: { legend: { display: false }, tooltip: {
             callbacks: {
+              title: () => '',  // suppress the date label entirely
               label: ctx => {
-                if (ctx.dataset.order >= 3) return null; // hide avg from tooltip
-                return ctx.dataset.label + ': ' + ctx.parsed.y + (ctx.datasetIndex === 2 ? 'ml' : 'g');
+                const v = ctx.parsed.y;
+                if (!v) return null;
+                if (ctx.dataset.order === 4) return `Avg formula by now: ${v}ml`;
+                if (ctx.dataset.order === 3) return `Avg solid by now: ${v}g`;
+                if (ctx.datasetIndex === 2)  return `Formula: ${v}ml`;
+                return `Solid: ${v}g`;
               }
             }
           }},
