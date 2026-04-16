@@ -877,8 +877,8 @@
                   const diff = chartTodayFml - chartAvgFml, abs = Math.abs(diff);
                   const tag = abs < 5
                     ? `<span style="color:#888">on track</span>`
-                    : diff < 0 ? `<span style="color:#ff3b30">−${abs}ml behind avg</span>`
-                               : `<span style="color:#34c759">+${abs}ml ahead of avg</span>`;
+                    : diff < 0 ? `<span style="color:#ff3b30">${abs}ml behind avg</span>`
+                               : `<span style="color:#34c759">${abs}ml ahead of avg</span>`;
                   html += `&ensp;·&ensp;Avg by now: ${chartAvgFml}ml&ensp;${tag}`;
                 }
                 setChartInfo(html);
@@ -888,8 +888,8 @@
                   const diff = chartTodaySld - chartAvgSld, abs = Math.abs(diff);
                   const tag = abs < 5
                     ? `<span style="color:#888">on track</span>`
-                    : diff < 0 ? `<span style="color:#ff3b30">−${abs}g behind avg</span>`
-                               : `<span style="color:#34c759">+${abs}g ahead of avg</span>`;
+                    : diff < 0 ? `<span style="color:#ff3b30">${abs}g behind avg</span>`
+                               : `<span style="color:#34c759">${abs}g ahead of avg</span>`;
                   html += `&ensp;·&ensp;Avg by now: ${chartAvgSld}g&ensp;${tag}`;
                 }
                 setChartInfo(html);
