@@ -694,7 +694,7 @@
     let chartTodaySld  = 0;      // today's actual solid total
     let chartTodayIdx  = -1;     // today's bar index (for plugin)
 
-    // Custom plugin: thin tick marks at avg levels on today's bar
+    // Custom plugin: colored status dots above today's bar (red=deficit, green=surplus, grey=on track)
     const avgBarPlugin = {
       id: 'avgBar',
       afterDatasetsDraw(chart) {
@@ -702,18 +702,26 @@
         const meta = chart.getDatasetMeta(0);
         const bar  = meta.data[chartTodayIdx];
         if (!bar) return;
-        const { ctx, scales: { y } } = chart;
-        const x = bar.x, w = bar.width;
-        ctx.save();
-        ctx.fillStyle = 'rgba(140,140,140,0.75)';
+        const { ctx } = chart;
+        const x    = bar.x;
+        const yTop = chart.chartArea.top + 7;
+        const dots = [];
         if (chartAvgFml > 0) {
-          const yFml = y.getPixelForValue(chartAvgFml);
-          ctx.beginPath(); ctx.roundRect(x - w/2, yFml - 1.5, w, 3, 1); ctx.fill();
+          const diff = chartTodayFml - chartAvgFml;
+          dots.push(Math.abs(diff) < 5 ? 'rgba(150,150,150,0.6)' : diff < 0 ? 'rgba(255,59,48,0.85)' : 'rgba(52,199,89,0.85)');
         }
         if (chartAvgSld > 0) {
-          const yCombined = y.getPixelForValue(chartAvgFml + chartAvgSld);
-          ctx.beginPath(); ctx.roundRect(x - w/2, yCombined - 1.5, w, 3, 1); ctx.fill();
+          const diff = chartTodaySld - chartAvgSld;
+          dots.push(Math.abs(diff) < 5 ? 'rgba(150,150,150,0.6)' : diff < 0 ? 'rgba(255,59,48,0.85)' : 'rgba(52,199,89,0.85)');
         }
+        ctx.save();
+        const startX = x - ((dots.length - 1) * 10) / 2;
+        dots.forEach((color, i) => {
+          ctx.beginPath();
+          ctx.arc(startX + i * 10, yTop, 4, 0, Math.PI * 2);
+          ctx.fillStyle = color;
+          ctx.fill();
+        });
         ctx.restore();
       }
     };
