@@ -692,35 +692,6 @@
     let chartTodaySld  = 0;      // today's actual solid total
     let chartTodayIdx  = -1;     // today's bar index (for plugin)
 
-    // Plugin: transparent color overlay on today's formula/solid bars
-    const avgBarPlugin = {
-      id: 'avgBar',
-      afterDatasetsDraw(chart) {
-        if (chartMode !== 'week' || weeksToShow !== 1 || chartTodayIdx < 0) return;
-        const { ctx, scales: { y } } = chart;
-        ctx.save();
-        const y0 = y.getPixelForValue(0);
-
-        function drawOverlay(datasetIdx, actual, avg) {
-          if (avg === 0) return;
-          const bar = chart.getDatasetMeta(datasetIdx).data[chartTodayIdx];
-          if (!bar) return;
-          const diff = actual - avg;
-          const color = Math.abs(diff) < 5
-            ? 'rgba(150,150,150,0.28)'
-            : diff < 0 ? 'rgba(255,59,48,0.28)' : 'rgba(52,199,89,0.28)';
-          const yTop = y.getPixelForValue(actual);
-          ctx.fillStyle = color;
-          ctx.beginPath();
-          ctx.roundRect(bar.x - bar.width / 2, yTop, bar.width, y0 - yTop, 4);
-          ctx.fill();
-        }
-
-        drawOverlay(0, chartTodayFml, chartAvgFml);
-        drawOverlay(1, chartTodaySld, chartAvgSld);
-        ctx.restore();
-      }
-    };
 
     // ── Chart info bar (replaces floating tooltips — always inside the card) ──
 
@@ -856,21 +827,28 @@
         }
       }
 
+      // Per-bar colors: today's bar reflects gap status, all others use base color
+      const gapColor = (diff, base) =>
+        Math.abs(diff) < 5 ? base : diff < 0 ? 'rgba(255,59,48,0.55)' : 'rgba(52,199,89,0.55)';
+      const fmlColors = formulaVals.map((_, i) =>
+        (i === chartTodayIdx && chartAvgFml > 0) ? gapColor(chartTodayFml - chartAvgFml, '#4a9eff') : '#4a9eff');
+      const sldColors = solidVals.map((_, i) =>
+        (i === chartTodayIdx && chartAvgSld > 0) ? gapColor(chartTodaySld - chartAvgSld, '#ffcc00') : '#ffcc00');
+
       const ctx = document.getElementById('feed-chart').getContext('2d');
       if (feedChart) feedChart.destroy();
       feedChart = new Chart(ctx, {
         type: 'bar',
-        plugins: [avgBarPlugin],
         data: {
           labels,
           datasets: [
-            { label: 'Formula (ml)', data: formulaVals, backgroundColor: '#4a9eff', borderRadius: 4 },
-            { label: 'Solid (g)',    data: solidVals,   backgroundColor: '#ffcc00', borderRadius: 4 },
+            { label: 'Formula (ml)', data: formulaVals, backgroundColor: fmlColors, borderRadius: 4, yAxisID: 'yLeft' },
+            { label: 'Solid (g)',    data: solidVals,   backgroundColor: sldColors, borderRadius: 4, yAxisID: 'yRight' },
           ]
         },
         options: {
           responsive: true,
-          plugins: { legend: { display: false }, avgBar: {}, tooltip: {
+          plugins: { legend: { display: false }, tooltip: {
             enabled: false,
             external({ tooltip }) {
               if (!tooltip.opacity) { clearChartInfo(); return; }
@@ -907,8 +885,10 @@
           }},
           scales: {
             x: { grid: { display: false }, ticks: { font: { size: 11 }, maxRotation: 45 } },
-            y: { grid: { color: '#f2f2f7' }, ticks: { font: { size: 11 } },
-                 title: { display: true, text: 'ml / g', font: { size: 10 }, color: '#aeaeb2' } }
+            yLeft:  { position: 'left',  grid: { color: '#f2f2f7' }, ticks: { font: { size: 11 } },
+                      title: { display: true, text: 'ml', font: { size: 10 }, color: '#4a9eff' } },
+            yRight: { position: 'right', grid: { drawOnChartArea: false }, ticks: { font: { size: 11 } },
+                      title: { display: true, text: 'g', font: { size: 10 }, color: '#b8a000' } }
           }
         }
       });
