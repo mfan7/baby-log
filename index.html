@@ -108,7 +108,7 @@
     .delete-btn { width: 100%; padding: 15px; background: white; color: #ff3b30; border: 1.5px solid #ff3b30; border-radius: 12px; font-size: 16px; font-weight: 600; cursor: pointer; margin-top: 10px; font-family: inherit; }
 
     /* Chart card */
-    .chart-card { background: white; border-radius: 14px; padding: 14px 16px 16px; margin-bottom: 20px; position: relative; overflow: visible; }
+    .chart-card { background: white; border-radius: 14px; padding: 14px 16px 16px; margin-bottom: 20px; }
     .chart-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
     .chart-title { font-size: 11px; font-weight: 700; color: #aeaeb2; text-transform: uppercase; letter-spacing: 0.6px; }
     .chart-toggle { display: flex; gap: 0; border: 1.5px solid #e5e5ea; border-radius: 8px; overflow: hidden; }
@@ -195,6 +195,7 @@
       </div>
       <canvas id="feed-chart" height="160"></canvas>
       <p id="chart-empty" style="text-align:center;color:#aeaeb2;font-size:13px;padding:20px 0;display:none;">No feeding data yet</p>
+      <div id="chart-info" style="min-height:32px;margin-top:6px;padding:6px 10px;border-radius:8px;background:#f2f2f7;font-size:12px;line-height:1.6;display:none;"></div>
     </div>
 
     <!-- Type buttons -->
@@ -727,80 +728,53 @@
       }
     };
 
-    // ── Tooltips: separate elements for bar hover vs dot hover ────────────────
-    // #chart-tooltip   → Chart.js external (bar amounts)
-    // #chart-dot-tip   → manual mousemove (dot avg/gap context)
+    // ── Chart info bar (replaces floating tooltips — always inside the card) ──
 
-    function getChartCard() { return document.querySelector('.chart-card'); }
-
-    function getOrCreateTooltip() {
-      let el = document.getElementById('chart-tooltip');
-      if (!el) {
-        el = document.createElement('div');
-        el.id = 'chart-tooltip';
-        el.style.cssText = 'position:absolute;background:rgba(28,28,30,0.88);color:#fff;border-radius:10px;padding:8px 12px;font-size:12px;line-height:1.7;pointer-events:none;white-space:nowrap;z-index:999;backdrop-filter:blur(4px);transition:opacity .1s;opacity:0;';
-        getChartCard().appendChild(el);
-      }
-      return el;
+    function setChartInfo(html) {
+      const el = document.getElementById('chart-info');
+      if (!el) return;
+      el.style.display = html ? 'block' : 'none';
+      el.innerHTML = html || '';
     }
 
-    function getOrCreateDotTip() {
-      let el = document.getElementById('chart-dot-tip');
-      if (!el) {
-        el = document.createElement('div');
-        el.id = 'chart-dot-tip';
-        el.style.cssText = 'position:absolute;background:rgba(28,28,30,0.88);color:#fff;border-radius:10px;padding:8px 12px;font-size:12px;line-height:1.7;pointer-events:none;white-space:nowrap;z-index:1000;backdrop-filter:blur(4px);transition:opacity .1s;opacity:0;';
-        getChartCard().appendChild(el);
-      }
-      return el;
-    }
+    function clearChartInfo() { setChartInfo(''); }
 
-    function showDotTooltip(clientX, clientY, type) {
-      const el   = getOrCreateDotTip();
-      const rows = [];
+    function dotInfoHtml(type) {
       if (type === 'formula') {
-        rows.push(`<span style="color:#4a9eff">●</span> Formula today: <b>${chartTodayFml}ml</b>`);
+        let html = `<span style="color:#4a9eff">●</span> <b>Formula today: ${chartTodayFml}ml</b>`;
         if (chartAvgFml > 0) {
           const diff = chartTodayFml - chartAvgFml, abs = Math.abs(diff);
-          const tag = abs < 5 ? `<span style="color:#aaa">on track</span>`
-            : diff < 0 ? `<span style="color:#ff3b30"><b>−${abs}ml</b></span>`
-                       : `<span style="color:#34c759"><b>+${abs}ml</b></span>`;
-          rows.push(`<span style="color:#aaa;font-size:11px">Avg by now: ${chartAvgFml}ml &nbsp;${tag}</span>`);
+          const tag = abs < 5
+            ? `<span style="color:#888">on track</span>`
+            : diff < 0 ? `<span style="color:#ff3b30">−${abs}ml behind avg</span>`
+                       : `<span style="color:#34c759">+${abs}ml ahead of avg</span>`;
+          html += `&ensp;·&ensp;Avg by now: ${chartAvgFml}ml&ensp;${tag}`;
         }
+        return html;
       } else {
-        rows.push(`<span style="color:#ffcc00">●</span> Solid today: <b>${chartTodaySld}g</b>`);
+        let html = `<span style="color:#ffcc00">●</span> <b>Solid today: ${chartTodaySld}g</b>`;
         if (chartAvgSld > 0) {
           const diff = chartTodaySld - chartAvgSld, abs = Math.abs(diff);
-          const tag = abs < 5 ? `<span style="color:#aaa">on track</span>`
-            : diff < 0 ? `<span style="color:#ff3b30"><b>−${abs}g</b></span>`
-                       : `<span style="color:#34c759"><b>+${abs}g</b></span>`;
-          rows.push(`<span style="color:#aaa;font-size:11px">Avg by now: ${chartAvgSld}g &nbsp;${tag}</span>`);
+          const tag = abs < 5
+            ? `<span style="color:#888">on track</span>`
+            : diff < 0 ? `<span style="color:#ff3b30">−${abs}g behind avg</span>`
+                       : `<span style="color:#34c759">+${abs}g ahead of avg</span>`;
+          html += `&ensp;·&ensp;Avg by now: ${chartAvgSld}g&ensp;${tag}`;
         }
+        return html;
       }
-      const cardRect = getChartCard().getBoundingClientRect();
-      el.innerHTML = rows.join('<br>');
-      el.style.opacity = '1';
-      el.style.left = (clientX - cardRect.left + 12) + 'px';
-      el.style.top  = (clientY - cardRect.top  - 10) + 'px';
     }
 
-    // Wire up dot hover once (canvas element persists across chart redraws)
+    // Wire up dot + bar hover on canvas (persists across chart redraws)
     document.getElementById('feed-chart').addEventListener('mousemove', e => {
       const rect = e.currentTarget.getBoundingClientRect();
       const mx = e.clientX - rect.left, my = e.clientY - rect.top;
       const hit = chartDots.find(d => Math.hypot(mx - d.x, my - d.y) <= 8);
-      const dotTip = getOrCreateDotTip();
-      if (hit) {
-        e.currentTarget.style.cursor = 'pointer';
-        showDotTooltip(e.clientX, e.clientY, hit.type);
-      } else {
-        e.currentTarget.style.cursor = '';
-        dotTip.style.opacity = '0'; // hide dot tip only; bar tip managed by Chart.js
-      }
+      e.currentTarget.style.cursor = hit ? 'pointer' : '';
+      if (hit) setChartInfo(dotInfoHtml(hit.type));
+      // bar hover info is set by Chart.js external callback below
     });
-    document.getElementById('feed-chart').addEventListener('mouseleave', () => {
-      getOrCreateDotTip().style.opacity = '0';
-    });
+    document.getElementById('feed-chart').addEventListener('mouseleave', clearChartInfo);
 
     function setChartMode(mode) {
       chartMode = mode;
@@ -939,23 +913,14 @@
           responsive: true,
           plugins: { legend: { display: false }, avgBar: {}, tooltip: {
             enabled: false,
-            external({ chart, tooltip }) {
-              const el = getOrCreateTooltip();
-              if (!tooltip.opacity) { el.style.opacity = '0'; return; }
+            external({ tooltip }) {
+              if (!tooltip.opacity) { clearChartInfo(); return; }
               const dp      = tooltip.dataPoints || [];
               const hovered = dp[0]?.datasetIndex;
               const fml     = dp.find(d => d.datasetIndex === 0)?.parsed.y || 0;
               const sld     = dp.find(d => d.datasetIndex === 1)?.parsed.y || 0;
-              const idx     = dp[0]?.dataIndex;
-              const rows = [];
-              if (hovered === 0 && fml) rows.push(`<span style="color:#4a9eff">●</span> Formula: <b>${fml}ml</b>`);
-              if (hovered === 1 && sld) rows.push(`<span style="color:#ffcc00">●</span> Solid: <b>${sld}g</b>`);
-              el.innerHTML = rows.join('<br>');
-              const cardRect = getChartCard().getBoundingClientRect();
-              const pos = chart.canvas.getBoundingClientRect();
-              el.style.opacity = '1';
-              el.style.left = (pos.left - cardRect.left + tooltip.caretX + 12) + 'px';
-              el.style.top  = (pos.top  - cardRect.top  + tooltip.caretY - 10) + 'px';
+              if (hovered === 0 && fml) setChartInfo(`<span style="color:#4a9eff">●</span> <b>Formula: ${fml}ml</b>`);
+              else if (hovered === 1 && sld) setChartInfo(`<span style="color:#ffcc00">●</span> <b>Solid: ${sld}g</b>`);
             }
           }},
           scales: {
