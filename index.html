@@ -683,6 +683,12 @@
 
     // ── Chart ─────────────────────────────────────────────────────────────────
 
+    // Gap color thresholds — tweak these to adjust sensitivity
+    const GAP_ON_TRACK_ML = 5;  // ml — below this = "on track" (no color change)
+    const GAP_ON_TRACK_G  = 5;  // g
+    const GAP_MAX_STEPS   = 5;  // intensity steps; step size = avg / GAP_MAX_STEPS
+                                // so full intensity is reached when gap ≈ daily avg
+
     let feedChart      = null;
     let chartMode      = 'week'; // 'week' | 'byweek'
     let weeksToShow    = 1;      // configurable in daily mode
@@ -704,7 +710,37 @@
 
     function clearChartInfo() { setChartInfo(''); }
 
-    document.getElementById('feed-chart').addEventListener('mouseleave', clearChartInfo);
+    function showTodayDefault() {
+      if (chartMode !== 'week' || weeksToShow !== 1 || chartTodayIdx < 0) { clearChartInfo(); return; }
+      const parts = [];
+      if (chartTodayFml > 0 || chartAvgFml > 0) {
+        let html = `<span style="color:#4a9eff">●</span> Formula: <b>${chartTodayFml}ml</b>`;
+        if (chartAvgFml > 0) {
+          const diff = chartTodayFml - chartAvgFml, abs = Math.abs(diff);
+          html += '&ensp;' + (abs < 5
+            ? `<span style="color:#888">on track</span>`
+            : diff < 0 ? `<span style="color:#ff3b30">−${abs}ml behind avg</span>`
+                       : `<span style="color:#34c759">+${abs}ml ahead of avg</span>`);
+        }
+        parts.push(html);
+      }
+      if (chartTodaySld > 0 || chartAvgSld > 0) {
+        let html = `<span style="color:#ffcc00">●</span> Solid: <b>${chartTodaySld}g</b>`;
+        if (chartAvgSld > 0) {
+          const diff = chartTodaySld - chartAvgSld, abs = Math.abs(diff);
+          html += '&ensp;' + (abs < 5
+            ? `<span style="color:#888">on track</span>`
+            : diff < 0 ? `<span style="color:#ff3b30">−${abs}g behind avg</span>`
+                       : `<span style="color:#34c759">+${abs}g ahead of avg</span>`);
+        }
+        parts.push(html);
+      }
+      parts.length
+        ? setChartInfo(`<span style="color:#888;font-size:11px">Today&ensp;</span>` + parts.join('&emsp;'))
+        : clearChartInfo();
+    }
+
+    document.getElementById('feed-chart').addEventListener('mouseleave', showTodayDefault);
 
     function setChartMode(mode) {
       chartMode = mode;
@@ -826,14 +862,25 @@
         }
       }
 
-      // Per-bar colors: today's bar reflects gap status, all others use base color
-      const gapColor = (diff, base) =>
-        Math.abs(diff) < 5 ? base : diff < 0 ? 'rgba(255,59,48,0.55)' : 'rgba(52,199,89,0.55)';
+      // Dynamic step size = avg / GAP_MAX_STEPS — full intensity when gap ≈ avg
+      const gapStepMl = chartAvgFml > 0 ? chartAvgFml / GAP_MAX_STEPS : 20;
+      const gapStepG  = chartAvgSld > 0 ? chartAvgSld / GAP_MAX_STEPS : 50;
+
+      // Per-bar colors: today's bar reflects gap status with intensity scaling
+      function gapColor(diff, base, onTrack, step) {
+        const abs = Math.abs(diff);
+        if (abs < onTrack) return base;
+        const intensity = Math.min(abs / step, GAP_MAX_STEPS) / GAP_MAX_STEPS;
+        const alpha = (0.20 + intensity * 0.65).toFixed(2);
+        return diff < 0 ? `rgba(255,59,48,${alpha})` : `rgba(52,199,89,${alpha})`;
+      }
       const showGap = weeksToShow === 1;
       const fmlColors = formulaVals.map((_, i) =>
-        (showGap && i === chartTodayIdx && chartAvgFml > 0) ? gapColor(chartTodayFml - chartAvgFml, '#4a9eff') : '#4a9eff');
+        (showGap && i === chartTodayIdx && chartAvgFml > 0)
+          ? gapColor(chartTodayFml - chartAvgFml, '#4a9eff', GAP_ON_TRACK_ML, gapStepMl) : '#4a9eff');
       const sldColors = solidVals.map((_, i) =>
-        (showGap && i === chartTodayIdx && chartAvgSld > 0) ? gapColor(chartTodaySld - chartAvgSld, '#ffcc00') : '#ffcc00');
+        (showGap && i === chartTodayIdx && chartAvgSld > 0)
+          ? gapColor(chartTodaySld - chartAvgSld, '#ffcc00', GAP_ON_TRACK_G, gapStepG) : '#ffcc00');
 
       const ctx = document.getElementById('feed-chart').getContext('2d');
       if (feedChart) feedChart.destroy();
@@ -851,7 +898,7 @@
           plugins: { legend: { display: false }, tooltip: {
             enabled: false,
             external({ tooltip }) {
-              if (!tooltip.opacity) { clearChartInfo(); return; }
+              if (!tooltip.opacity) { showTodayDefault(); return; }
               const dp      = tooltip.dataPoints || [];
               const hovered = dp[0]?.datasetIndex;
               const idx     = dp[0]?.dataIndex;
@@ -905,6 +952,7 @@
           }
         }
       });
+      showTodayDefault(); // pin today's info immediately after chart renders
     }
 
     // ── Edit modal ────────────────────────────────────────────────────────────
