@@ -858,8 +858,21 @@
               const isToday = chartMode === 'week' && weeksToShow === 1 && idx === chartTodayIdx;
               const fml     = dp.find(d => d.datasetIndex === 0)?.parsed.y || 0;
               const sld     = dp.find(d => d.datasetIndex === 1)?.parsed.y || 0;
+
+              // Date / week label prefix
+              let dateLabel = '';
+              if (chartMode === 'week' && idx != null && days[idx]) {
+                const d = days[idx];
+                dateLabel = isToday
+                  ? '<span style="color:#888;font-size:11px">Today</span>&ensp;'
+                  : `<span style="color:#888;font-size:11px">${d.toLocaleDateString([], { weekday: 'short', month: 'numeric', day: 'numeric' })}</span>&ensp;`;
+              } else if (chartMode === 'byweek' && idx != null && labels[idx]) {
+                const raw = Array.isArray(labels[idx]) ? labels[idx].join(' ') : labels[idx];
+                dateLabel = `<span style="color:#888;font-size:11px">${raw}</span>&ensp;`;
+              }
+
               if (hovered === 0) {
-                let html = `<span style="color:#4a9eff">●</span> <b>Formula: ${fml}ml</b>`;
+                let html = dateLabel + `<span style="color:#4a9eff">●</span> <b>Formula: ${fml}ml</b>`;
                 if (isToday && chartAvgFml > 0) {
                   const diff = chartTodayFml - chartAvgFml, abs = Math.abs(diff);
                   const tag = abs < 5
@@ -870,7 +883,7 @@
                 }
                 setChartInfo(html);
               } else if (hovered === 1) {
-                let html = `<span style="color:#ffcc00">●</span> <b>Solid: ${sld}g</b>`;
+                let html = dateLabel + `<span style="color:#ffcc00">●</span> <b>Solid: ${sld}g</b>`;
                 if (isToday && chartAvgSld > 0) {
                   const diff = chartTodaySld - chartAvgSld, abs = Math.abs(diff);
                   const tag = abs < 5
