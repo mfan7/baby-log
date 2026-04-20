@@ -819,18 +819,20 @@
         });
       } else {
         // By week: last 6 weeks, avg per day in each week
-        const weekMap = {}; // weekKey → { mlTotal, gTotal, days: Set }
+        const weekMap = {}; // weekKey → { mlTotal, gTotal, fmlDays: Set, sldDays: Set }
         data.forEach(r => {
-          const wk = weekKey(new Date(r.logged_at));
-          if (!weekMap[wk]) weekMap[wk] = { mlTotal: 0, gTotal: 0, days: new Set() };
+          const wk  = weekKey(new Date(r.logged_at));
+          const day = dateKey(new Date(r.logged_at));
+          if (!weekMap[wk]) weekMap[wk] = { mlTotal: 0, gTotal: 0, fmlDays: new Set(), sldDays: new Set() };
           weekMap[wk].mlTotal += r.amount_ml || 0;
           weekMap[wk].gTotal  += r.amount_g  || 0;
-          weekMap[wk].days.add(dateKey(new Date(r.logged_at)));
+          if ((r.amount_ml || 0) > 0) weekMap[wk].fmlDays.add(day);
+          if ((r.amount_g  || 0) > 0) weekMap[wk].sldDays.add(day);
         });
         const weeks = Object.keys(weekMap).sort().slice(-6);
         labels      = weeks.map(wk => { const d = new Date(wk); return `W ${d.getMonth()+1}/${d.getDate()}`; });
-        formulaVals = weeks.map(wk => Math.round(weekMap[wk].mlTotal / weekMap[wk].days.size));
-        solidVals   = weeks.map(wk => Math.round(weekMap[wk].gTotal  / weekMap[wk].days.size));
+        formulaVals = weeks.map(wk => weekMap[wk].fmlDays.size > 0 ? Math.round(weekMap[wk].mlTotal / weekMap[wk].fmlDays.size) : 0);
+        solidVals   = weeks.map(wk => weekMap[wk].sldDays.size > 0 ? Math.round(weekMap[wk].gTotal  / weekMap[wk].sldDays.size) : 0);
       }
 
       // ── Grey avg bars: store values for canvas plugin, compute Option B ──
