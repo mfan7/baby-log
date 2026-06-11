@@ -692,6 +692,7 @@
     let feedChart      = null;
     let chartMode      = 'week'; // 'week' | 'byweek'
     let weeksToShow    = 1;      // configurable in daily mode
+    let byweeksToShow  = 6;      // configurable in by-week mode
     let chartAvgFml    = 0;      // avg formula by now (for plugin)
     let chartAvgSld    = 0;      // avg solid by now (for plugin)
     let chartTodayFml  = 0;      // today's actual formula total
@@ -748,14 +749,23 @@
       chartMode = mode;
       document.getElementById('toggle-week').classList.toggle('active', mode === 'week');
       document.getElementById('toggle-byweek').classList.toggle('active', mode === 'byweek');
-      document.getElementById('week-stepper').style.display = mode === 'week' ? 'flex' : 'none';
+      const val = mode === 'week' ? weeksToShow : byweeksToShow;
+      document.getElementById('weeks-label').textContent = val;
+      document.getElementById('weeks-unit').textContent  = val === 1 ? 'week' : 'weeks';
+      document.getElementById('week-stepper').style.display = 'flex';
       loadChart();
     }
 
     function changeWeeks(delta) {
-      weeksToShow = Math.max(1, Math.min(8, weeksToShow + delta));
-      document.getElementById('weeks-label').textContent = weeksToShow;
-      document.getElementById('weeks-unit').textContent  = weeksToShow === 1 ? 'week' : 'weeks';
+      if (chartMode === 'week') {
+        weeksToShow = Math.max(1, Math.min(8, weeksToShow + delta));
+        document.getElementById('weeks-label').textContent = weeksToShow;
+        document.getElementById('weeks-unit').textContent  = weeksToShow === 1 ? 'week' : 'weeks';
+      } else {
+        byweeksToShow = Math.max(1, Math.min(26, byweeksToShow + delta));
+        document.getElementById('weeks-label').textContent = byweeksToShow;
+        document.getElementById('weeks-unit').textContent  = byweeksToShow === 1 ? 'week' : 'weeks';
+      }
       loadChart();
     }
 
@@ -777,7 +787,7 @@
 
     async function loadChart() {
       // Fetch enough data for current view
-      const daysNeeded = chartMode === 'week' ? weeksToShow * 7 : 56;
+      const daysNeeded = chartMode === 'week' ? weeksToShow * 7 : byweeksToShow * 7;
       const since = new Date();
       since.setDate(since.getDate() - daysNeeded);
       const { data } = await sb.from('care_logs')
@@ -833,7 +843,7 @@
           if ((r.amount_ml || 0) > 0) weekMap[wk].fmlDays.add(day);
           if ((r.amount_g  || 0) > 0) weekMap[wk].sldDays.add(day);
         });
-        const weeks = Object.keys(weekMap).sort().slice(-6);
+        const weeks = Object.keys(weekMap).sort().slice(-byweeksToShow);
         labels      = weeks.map(wk => { const d = new Date(wk); return `W ${d.getMonth()+1}/${d.getDate()}`; });
         formulaVals = weeks.map(wk => weekMap[wk].fmlDays.size > 0 ? Math.round(weekMap[wk].mlTotal / weekMap[wk].fmlDays.size) : 0);
         solidVals   = weeks.map(wk => weekMap[wk].sldDays.size > 0 ? Math.round(weekMap[wk].gTotal  / weekMap[wk].sldDays.size) : 0);
