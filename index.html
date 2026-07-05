@@ -153,8 +153,10 @@
           <div class="stat-icon">🍼</div>
           <div class="stat-value" id="stat-formula">—</div>
           <div class="stat-label">formula</div>
-          <div class="stat-sub" id="stat-solid-sub"></div>
-          <div class="stat-sub" id="stat-feed-last"></div>
+          <div class="stat-sub" id="stat-formula-last"></div>
+          <div class="stat-value" id="stat-solid" style="margin-top:8px;">—</div>
+          <div class="stat-label">solid</div>
+          <div class="stat-sub" id="stat-solid-last"></div>
         </div>
         <div class="stat-col">
           <div class="stat-icon">🚼</div>
@@ -573,14 +575,17 @@
 
       if (!data) return;
 
-      // Feed stats
-      const feeds = data.filter(r => r.type === 'feed');
-      const totalMl  = feeds.reduce((s, r) => s + (r.amount_ml || 0), 0);
-      const totalG   = feeds.reduce((s, r) => s + (r.amount_g  || 0), 0);
-      const lastFeed = feeds[0]?.logged_at;
-      document.getElementById('stat-formula').textContent  = totalMl > 0 ? `${totalMl}ml` : (feeds.length > 0 ? `${feeds.length}×` : '—');
-      document.getElementById('stat-solid-sub').textContent = totalG  > 0 ? `+ ${totalG}g solid` : '';
-      document.getElementById('stat-feed-last').textContent = lastFeed ? agoStr(lastFeed) : (feeds.length === 0 ? 'none today' : '');
+      // Feed stats — formula and solid tracked independently
+      const feeds = data.filter(r => r.type === 'feed'); // newest-first (query orders desc)
+      const totalMl = feeds.reduce((s, r) => s + (r.amount_ml || 0), 0);
+      const totalG  = feeds.reduce((s, r) => s + (r.amount_g  || 0), 0);
+      const lastFormula = feeds.find(r => r.had_formula);
+      const lastSolid   = feeds.find(r => r.had_solid);
+
+      document.getElementById('stat-formula').textContent      = totalMl > 0 ? `${totalMl}ml` : (lastFormula ? '✓' : '—');
+      document.getElementById('stat-formula-last').textContent = lastFormula ? `last ${agoStr(lastFormula.logged_at)}` : 'none today';
+      document.getElementById('stat-solid').textContent        = totalG  > 0 ? `${totalG}g`  : (lastSolid ? '✓' : '—');
+      document.getElementById('stat-solid-last').textContent   = lastSolid ? `last ${agoStr(lastSolid.logged_at)}` : 'none today';
 
       // Diaper stats
       const diapers    = data.filter(r => r.type.startsWith('diaper'));
