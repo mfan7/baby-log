@@ -49,15 +49,16 @@ are also downloadable by any signed-in GitHub user, so they are not a private
 place for this data either.)
 
 Data is backed up from **inside the app** instead. The header has an **⇩ Export**
-button that:
+button that reads all of the signed-in user's rows (Row Level Security scopes the
+query to that user) and opens a panel showing the full backup as text. From there:
 
-- reads all of the signed-in user's rows (Row Level Security scopes the query to
-  that user), and
-- downloads them as `baby-log-backup-<date>.json` **directly to your device**.
+- **Save to Files / Share** opens the OS share sheet — on iPhone choose *Save to
+  Files* to write a real `baby-log-backup-<date>.json`. (This is used instead of
+  a silent browser download, which on iOS Safari often saves an empty file.)
+- **Copy to clipboard** copies the whole backup to paste anywhere (Notes, email).
 
-Nothing is uploaded to GitHub or any third party — the file only exists on the
-phone/computer that tapped the button. Tap it whenever you want a fresh copy and
-keep the files wherever you like (Files app, iCloud/Drive, etc.).
+Nothing is uploaded to GitHub or any third party — the data only leaves via the
+share/copy action you choose, to a destination you pick.
 
 ### Restore from an export
 
