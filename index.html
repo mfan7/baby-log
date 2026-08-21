@@ -852,16 +852,38 @@
       return dateKey(day);
     }
 
+    // Supabase/PostgREST returns at most 1000 rows per request. This pages
+    // through with .range() until a short page comes back, so callers get the
+    // full result set regardless of size. `makeQuery` must return a FRESH
+    // builder each call (builders are single-use).
+    async function fetchAllPaged(makeQuery, pageSize = 1000) {
+      let from = 0, all = [];
+      while (true) {
+        const { data, error } = await makeQuery().range(from, from + pageSize - 1);
+        if (error) throw error;
+        if (!data || data.length === 0) break;
+        all = all.concat(data);
+        if (data.length < pageSize) break;
+        from += pageSize;
+      }
+      return all;
+    }
+
     async function loadChart() {
       // Fetch enough data for current view
       const daysNeeded = chartMode === 'week' ? weeksToShow * 7 : byweeksToShow * 7;
       const since = new Date();
       since.setDate(since.getDate() - daysNeeded);
-      const { data } = await sb.from('care_logs')
-        .select('logged_at, amount_ml, amount_g')
-        .eq('type', 'feed')
-        .gte('logged_at', since.toISOString())
-        .order('logged_at', { ascending: true });
+      let data;
+      try {
+        data = await fetchAllPaged(() => sb.from('care_logs')
+          .select('logged_at, amount_ml, amount_g')
+          .eq('type', 'feed')
+          .gte('logged_at', since.toISOString())
+          .order('logged_at', { ascending: true }));
+      } catch (e) {
+        data = null;
+      }
 
       if (!data || data.length === 0) {
         document.getElementById('feed-chart').style.display = 'none';
@@ -1194,10 +1216,14 @@
 
     async function exportData() {
       showToast('Preparing export…');
-      const { data, error } = await sb.from('care_logs')
-        .select('*')
-        .order('logged_at', { ascending: true });
-      if (error) { showToast('Export failed: ' + error.message); return; }
+      let data;
+      try {
+        data = await fetchAllPaged(() => sb.from('care_logs')
+          .select('*')
+          .order('logged_at', { ascending: true }));
+      } catch (error) {
+        showToast('Export failed: ' + (error.message || error)); return;
+      }
 
       const payload = {
         app: 'baby-log',
