@@ -376,6 +376,26 @@
     </div>
   </div>
 
+  <!-- Export modal -->
+  <div class="modal-overlay hidden" id="export-modal" onclick="closeExportModal(event)">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>Export data</h2>
+        <button class="modal-close" onclick="closeExportModalBtn()">Close</button>
+      </div>
+      <p id="export-summary" style="font-size:13px;color:#6e6e73;margin-bottom:10px;"></p>
+      <textarea id="export-text" readonly rows="10"
+        style="width:100%;font-family:ui-monospace,Menlo,monospace;font-size:12px;resize:none;white-space:pre;overflow:auto;"
+        onclick="this.select()"></textarea>
+      <button class="submit-btn" id="export-share-btn" onclick="shareExport()">Save to Files / Share</button>
+      <button class="submit-btn" onclick="copyExport()" style="background:#f2f2f7;color:#007aff;margin-top:8px;">Copy to clipboard</button>
+      <p style="font-size:12px;color:#aeaeb2;margin-top:10px;line-height:1.5;">
+        “Save to Files / Share” opens your phone’s share sheet — choose <b>Save to Files</b> to keep a real
+        <code>.json</code> copy. The text above is your full backup; you can also copy it anywhere.
+      </p>
+    </div>
+  </div>
+
   <div class="toast" id="toast"></div>
 
   <script>
@@ -1165,8 +1185,13 @@
     }
 
     // ── Export / backup ─────────────────────────────────────────────────────────
-    // Downloads all of the signed-in user's rows (RLS scopes to them) as a JSON
-    // file, straight to the device. Nothing leaves for GitHub or any third party.
+    // Reads all of the signed-in user's rows (RLS scopes to them) and shows them
+    // on screen. From there the data can be saved via the OS Share sheet (which
+    // writes a real file on iOS, unlike a silent blob download) or copied.
+    // Nothing leaves for GitHub or any third party.
+    let exportJson = '';
+    let exportFilename = '';
+
     async function exportData() {
       showToast('Preparing export…');
       const { data, error } = await sb.from('care_logs')
@@ -1180,17 +1205,50 @@
         count: data.length,
         rows: data,
       };
-      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
-      const url  = URL.createObjectURL(blob);
-      const stamp = new Date().toISOString().slice(0, 10);
+      exportJson = JSON.stringify(payload, null, 2);
+      exportFilename = `baby-log-backup-${new Date().toISOString().slice(0, 10)}.json`;
+
+      document.getElementById('export-summary').textContent = `${data.length} entries · ${exportFilename}`;
+      document.getElementById('export-text').value = exportJson;
+      document.getElementById('export-modal').classList.remove('hidden');
+    }
+
+    // Triggered by a fresh tap inside the modal, so no async work sits between
+    // the user gesture and navigator.share — which is what iOS Safari requires.
+    async function shareExport() {
+      try {
+        const file = new File([exportJson], exportFilename, { type: 'application/json' });
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          await navigator.share({ files: [file], title: exportFilename });
+          return;
+        }
+      } catch (e) {
+        if (e && e.name === 'AbortError') return; // user dismissed the share sheet
+        // otherwise fall through to download
+      }
+      const url = URL.createObjectURL(new Blob([exportJson], { type: 'application/json' }));
       const a = document.createElement('a');
-      a.href = url;
-      a.download = `baby-log-backup-${stamp}.json`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
+      a.href = url; a.download = exportFilename;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
       setTimeout(() => URL.revokeObjectURL(url), 1000);
-      showToast(`Exported ${data.length} entries`);
+      showToast('Saved');
+    }
+
+    async function copyExport() {
+      try {
+        await navigator.clipboard.writeText(exportJson);
+        showToast('Copied');
+      } catch {
+        const ta = document.getElementById('export-text');
+        ta.focus(); ta.select();
+        try { document.execCommand('copy'); showToast('Copied'); }
+        catch { showToast('Select the text and copy'); }
+      }
+    }
+
+    function closeExportModalBtn() { document.getElementById('export-modal').classList.add('hidden'); }
+    function closeExportModal(e) {
+      if (e.target === document.getElementById('export-modal')) closeExportModalBtn();
     }
 
     function showToast(msg) {
