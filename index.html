@@ -43,11 +43,11 @@
     /* Fields */
     .field { margin-bottom: 16px; }
     label { display: block; font-size: 12px; font-weight: 700; color: #6e6e73; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.6px; }
-    input[type=number], input[type=datetime-local], textarea {
+    input[type=number], input[type=datetime-local], input[type=text], textarea, select {
       width: 100%; padding: 13px; border: 1.5px solid #e5e5ea; border-radius: 10px;
       font-size: 16px; background: white; -webkit-appearance: none; font-family: inherit;
     }
-    input:focus, textarea:focus { outline: none; border-color: #007aff; }
+    input:focus, textarea:focus, select:focus { outline: none; border-color: #007aff; }
 
     /* Checkboxes */
     .check-row { display: flex; gap: 10px; }
@@ -254,13 +254,34 @@
           <div class="radio-item selected" id="act-play"     onclick="setActivity('play')"     style="flex:1 1 calc(33% - 8px)">🧸 Play</div>
           <div class="radio-item"          id="act-study"    onclick="setActivity('study')"    style="flex:1 1 calc(33% - 8px)">📚 Study</div>
           <div class="radio-item"          id="act-soothe"   onclick="setActivity('soothe')"   style="flex:1 1 calc(33% - 8px)">🤗 Soothe</div>
-          <div class="radio-item"          id="act-exercise" onclick="setActivity('exercise')" style="flex:1 1 calc(33% - 8px)">🏃 Exercise</div>
+          <div class="radio-item"          id="act-medication" onclick="setActivity('medication')" style="flex:1 1 calc(33% - 8px)">💊 Meds</div>
           <div class="radio-item"          id="act-other"    onclick="setActivity('other')"    style="flex:1 1 calc(33% - 8px)">✏️ Other</div>
         </div>
       </div>
       <div class="field" id="other-label-field" style="display:none;">
         <label>Custom label</label>
         <input type="text" id="other-label" placeholder="e.g. bath, massage…" style="width:100%;padding:13px;border:1.5px solid #e5e5ea;border-radius:10px;font-size:16px;">
+      </div>
+      <div class="field" id="med-field" style="display:none;">
+        <label>Medication</label>
+        <select id="med-select" onchange="onMedChange()">
+          <option value="Tylenol (acetaminophen)">Tylenol (acetaminophen)</option>
+          <option value="Motrin / Advil (ibuprofen)">Motrin / Advil (ibuprofen)</option>
+          <option value="Vitamin D drops">Vitamin D drops</option>
+          <option value="Teething gel">Teething gel</option>
+          <option value="Saline nasal drops">Saline nasal drops</option>
+          <option value="Diaper rash cream">Diaper rash cream</option>
+          <option value="Pedialyte">Pedialyte</option>
+          <option value="Other">Other…</option>
+        </select>
+      </div>
+      <div class="field" id="med-other-field" style="display:none;">
+        <label>Medication name</label>
+        <input type="text" id="med-other" placeholder="e.g. amoxicillin">
+      </div>
+      <div class="field" id="med-dose-field" style="display:none;">
+        <label>Dose (optional)</label>
+        <input type="text" id="med-dose" placeholder="e.g. 2.5 ml or 80 mg">
       </div>
     </div>
 
@@ -340,7 +361,7 @@
             <div class="radio-item" id="edit-act-play"     onclick="setEditActivity('play')"     style="flex:1 1 calc(33% - 8px)">🧸 Play</div>
             <div class="radio-item" id="edit-act-study"    onclick="setEditActivity('study')"    style="flex:1 1 calc(33% - 8px)">📚 Study</div>
             <div class="radio-item" id="edit-act-soothe"   onclick="setEditActivity('soothe')"   style="flex:1 1 calc(33% - 8px)">🤗 Soothe</div>
-            <div class="radio-item" id="edit-act-exercise" onclick="setEditActivity('exercise')" style="flex:1 1 calc(33% - 8px)">🏃 Exercise</div>
+            <div class="radio-item" id="edit-act-medication" onclick="setEditActivity('medication')" style="flex:1 1 calc(33% - 8px)">💊 Meds</div>
             <div class="radio-item" id="edit-act-other"    onclick="setEditActivity('other')"    style="flex:1 1 calc(33% - 8px)">✏️ Other</div>
           </div>
         </div>
@@ -453,10 +474,19 @@
 
     function setActivity(sub) {
       activitySubtype = sub;
-      ['play', 'study', 'soothe', 'exercise', 'other'].forEach(t =>
+      ['play', 'study', 'soothe', 'medication', 'other'].forEach(t =>
         document.getElementById(`act-${t}`).classList.toggle('selected', t === sub)
       );
       document.getElementById('other-label-field').style.display = sub === 'other' ? 'block' : 'none';
+      const isMed = sub === 'medication';
+      document.getElementById('med-field').style.display      = isMed ? 'block' : 'none';
+      document.getElementById('med-dose-field').style.display = isMed ? 'block' : 'none';
+      if (isMed) onMedChange(); else document.getElementById('med-other-field').style.display = 'none';
+    }
+
+    function onMedChange() {
+      const isOther = document.getElementById('med-select').value === 'Other';
+      document.getElementById('med-other-field').style.display = isOther ? 'block' : 'none';
     }
 
     function setDiaper(type) {
@@ -524,6 +554,13 @@
         if (activitySubtype === 'other') {
           const label = document.getElementById('other-label').value.trim();
           if (label) row.notes = label + (notes ? ' · ' + notes : '');
+        } else if (activitySubtype === 'medication') {
+          const sel  = document.getElementById('med-select').value;
+          const name = sel === 'Other' ? document.getElementById('med-other').value.trim() : sel;
+          if (!name) { showToast('Select a medication'); btn.disabled = false; btn.textContent = 'Save'; return; }
+          const dose  = document.getElementById('med-dose').value.trim();
+          const label = name + (dose ? ` — ${dose}` : '');
+          row.notes = label + (notes ? ' · ' + notes : '');
         }
       }
 
@@ -550,6 +587,10 @@
       });
       document.getElementById('field-ml').classList.remove('hidden');
       document.getElementById('field-g').classList.remove('hidden');
+      document.getElementById('med-select').selectedIndex = 0;
+      document.getElementById('med-other').value = '';
+      document.getElementById('med-dose').value  = '';
+      document.getElementById('med-other-field').style.display = 'none';
       setDiaper('wet');
       setDefaultTime();
     }
@@ -597,7 +638,7 @@
       document.getElementById('stat-diaper-last').textContent   = lastDiaper ? agoStr(lastDiaper) : (diapers.length === 0 ? 'none today' : '');
 
       // Activity stats
-      const ACTIVITY_LABELS = { play: '🧸', study: '📚', soothe: '🤗', exercise: '🏃', other: '✏️' };
+      const ACTIVITY_LABELS = { play: '🧸', study: '📚', soothe: '🤗', medication: '💊', other: '✏️' };
       const activities  = data.filter(r => r.type.startsWith('activity_'));
       const lastActivity = activities[0]?.logged_at;
       const actCounts   = {};
@@ -677,7 +718,7 @@
       </div>`;
     }
 
-    const ACTIVITY_NAMES = { play: '🧸 Play', study: '📚 Study', soothe: '🤗 Soothe', exercise: '🏃 Exercise', other: '✏️ Other' };
+    const ACTIVITY_NAMES = { play: '🧸 Play', study: '📚 Study', soothe: '🤗 Soothe', medication: '💊 Medication', other: '✏️ Other' };
     const TYPE_LABELS = {
       feed: '🍼 Feed', diaper_wet: '🚼 Wet', diaper_dirty: '🚼 Dirty', diaper_both: '🚼 Wet + Dirty',
     };
@@ -1057,7 +1098,7 @@
 
     function setEditActivity(sub) {
       editActivitySub = sub;
-      ['play', 'study', 'soothe', 'exercise', 'other'].forEach(t =>
+      ['play', 'study', 'soothe', 'medication', 'other'].forEach(t =>
         document.getElementById(`edit-act-${t}`).classList.toggle('selected', t === sub)
       );
     }
