@@ -5,10 +5,13 @@ name: Weekly DB backup
 # and is NOT committed to this (public) repo, so personal data stays private.
 #
 # ── One-time setup ──────────────────────────────────────────────────────────
-# 1. Supabase Dashboard → Project Settings → Database → Connection string.
-#    Choose the **Session pooler** tab (IPv4-compatible; GitHub runners are
-#    IPv4-only, and the pooler's session mode supports pg_dump). Copy the URI
-#    and put your database password into it.
+# 1. Open the project and tap the **Connect** button in the top header
+#    (quicker than Settings → Database). In the popup, pick the **Session
+#    pooler** / Session mode (port 5432 — IPv4-compatible, which GitHub
+#    runners need, and it supports pg_dump). Copy the URI and replace
+#    [YOUR-PASSWORD] with your database password.
+#    Forgot the password? Settings → Database → Reset database password
+#    (safe: the app authenticates with the anon key, not this password).
 # 2. GitHub → repo → Settings → Secrets and variables → Actions → New secret:
 #      Name:  SUPABASE_DB_URL
 #      Value: the full connection URI from step 1
