@@ -23,7 +23,10 @@ name: Weekly DB backup
 #    a manual run or any commit re-arms it.
 #  - Artifacts here are retained 90 days. For long-term keeping, download the
 #    ones you want to archive.
-#  - Restore with:  psql "$SUPABASE_DB_URL" -f baby-log-backup-<timestamp>.sql
+#  - To restore: download the artifact from the run, unzip it, then run
+#      psql "$SUPABASE_DB_URL" -f baby-log-backup-<timestamp>.sql
+#    Restore into the SAME project (your auth user still exists) so the
+#    care_logs.user_id values still line up. See db/README.md for full steps.
 
 on:
   schedule:
@@ -48,8 +51,11 @@ jobs:
           ts=$(date -u +%Y%m%d-%H%M%S)
           out="baby-log-backup-${ts}.sql"
           # pg_dump from the postgres:17 image dumps servers up to v17 safely.
+          # --clean --if-exists makes the dump self-restoring: it drops and
+          # recreates its objects, so `psql -f <file>` works whether the table
+          # is missing, empty, or already present.
           docker run --rm -e SUPABASE_DB_URL postgres:17 \
-            sh -c 'pg_dump "$SUPABASE_DB_URL" --schema=public --no-owner --no-privileges' \
+            sh -c 'pg_dump "$SUPABASE_DB_URL" --schema=public --no-owner --no-privileges --clean --if-exists' \
             > "$out"
           ls -lh "$out"
           # Fail loudly if the dump came back empty.
