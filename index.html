@@ -1220,7 +1220,7 @@
       try {
         data = await fetchAllPaged(() => sb.from('care_logs')
           .select('*')
-          .order('logged_at', { ascending: true }));
+          .order('logged_at', { ascending: false })); // latest entries first
       } catch (error) {
         showToast('Export failed: ' + (error.message || error)); return;
       }
