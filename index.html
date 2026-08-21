@@ -140,6 +140,7 @@
     <div class="top-bar">
       <h1>Baby Log</h1>
       <div style="display:flex;gap:12px;align-items:center;">
+        <button class="logout-btn" onclick="exportData()" style="color:#007aff;">⇩ Export</button>
         <button class="logout-btn" onclick="refreshAll()" style="color:#34c759;">↻ Refresh</button>
         <button class="logout-btn" onclick="logout()">Sign out</button>
       </div>
@@ -1161,6 +1162,35 @@
       loadStats();
       loadChart();
       showToast('Refreshed');
+    }
+
+    // ── Export / backup ─────────────────────────────────────────────────────────
+    // Downloads all of the signed-in user's rows (RLS scopes to them) as a JSON
+    // file, straight to the device. Nothing leaves for GitHub or any third party.
+    async function exportData() {
+      showToast('Preparing export…');
+      const { data, error } = await sb.from('care_logs')
+        .select('*')
+        .order('logged_at', { ascending: true });
+      if (error) { showToast('Export failed: ' + error.message); return; }
+
+      const payload = {
+        app: 'baby-log',
+        exported_at: new Date().toISOString(),
+        count: data.length,
+        rows: data,
+      };
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+      const url  = URL.createObjectURL(blob);
+      const stamp = new Date().toISOString().slice(0, 10);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `baby-log-backup-${stamp}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      showToast(`Exported ${data.length} entries`);
     }
 
     function showToast(msg) {

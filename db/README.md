@@ -43,45 +43,33 @@ plan.
 
 ## Backups
 
-Schema is captured here; **data** is backed up separately by the
-`.github/workflows/backup.yml` GitHub Action (a weekly `pg_dump` uploaded as a
-private workflow artifact). See that file's comments for setup. Do **not** commit
-database *data* into this repo — it is public, and the logs contain personal
-information.
+**Never commit database *data* into this repo — it is public**, and the logs
+contain personal information. (Note: GitHub Actions artifacts on a *public* repo
+are also downloadable by any signed-in GitHub user, so they are not a private
+place for this data either.)
 
-### Where the backups are
+Data is backed up from **inside the app** instead. The header has an **⇩ Export**
+button that:
 
-Each backup run attaches a **GitHub Actions artifact** (this is GitHub's own
-"artifact" feature, unrelated to anything else). Find them at:
+- reads all of the signed-in user's rows (Row Level Security scopes the query to
+  that user), and
+- downloads them as `baby-log-backup-<date>.json` **directly to your device**.
 
-**GitHub repo → Actions → "Weekly DB backup" → open a run → Artifacts → `db-backup`.**
+Nothing is uploaded to GitHub or any third party — the file only exists on the
+phone/computer that tapped the button. Tap it whenever you want a fresh copy and
+keep the files wherever you like (Files app, iCloud/Drive, etc.).
 
-Download it (a `.zip`), unzip it, and you get a plain-text SQL file named
-`baby-log-backup-<timestamp>.sql`. Artifacts are private to repo collaborators
-and kept for 90 days — download and store elsewhere any you want to keep longer.
+### Restore from an export
 
-### Restore (if the database loses its data)
+The export is JSON: `{ app, exported_at, count, rows: [ …care_logs rows… ] }`.
+To load it back into an empty/new `care_logs` table, insert the `rows` array.
+For this small dataset the simplest path is Supabase → SQL Editor, e.g. with the
+JSON pasted into a `jsonb` literal:
 
-The dump is created with `--clean --if-exists`, so it drops and recreates its
-own objects — running it works whether `care_logs` is empty, missing, or still
-present. You need the same `SUPABASE_DB_URL` connection string used for backups.
-
-```sh
-# 1. Unzip the downloaded artifact, then:
-psql "$SUPABASE_DB_URL" -f baby-log-backup-<timestamp>.sql
+```sql
+insert into care_logs
+select * from jsonb_populate_recordset(null::care_logs, '<paste the rows array here>');
 ```
 
-That recreates the `care_logs` table, its RLS policies, and all rows.
-
-You don't need `psql` on your own machine if you'd rather not install it — you
-can paste the file's contents into **Supabase → SQL Editor** and run it there
-(fine for this small dataset).
-
-**Caveats**
-
-- Restore into the **same Supabase project**. The dump covers the `public`
-  schema (your data) but not Supabase's `auth` schema, so `care_logs.user_id`
-  only matches up if your original auth user still exists. Restoring into a
-  brand-new project would need the user re-created first (or the foreign key
-  adjusted).
-- This is app data only — it is not a full project clone.
+Restore into the **same Supabase project** so each row's `user_id` still matches
+your auth user. This is app data only, not a full project clone.
