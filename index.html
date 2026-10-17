@@ -257,6 +257,7 @@
           <div class="radio-item"          id="act-soothe"   onclick="setActivity('soothe')"   style="flex:1 1 calc(33% - 8px)">🤗 Soothe</div>
           <div class="radio-item"          id="act-medication" onclick="setActivity('medication')" style="flex:1 1 calc(33% - 8px)">💊 Meds</div>
           <div class="radio-item"          id="act-brushteeth" onclick="setActivity('brushteeth')" style="flex:1 1 calc(33% - 8px)">🪥 Teeth</div>
+          <div class="radio-item"          id="act-bath"     onclick="setActivity('bath')"     style="flex:1 1 calc(33% - 8px)">🛁 Bath</div>
           <div class="radio-item"          id="act-other"    onclick="setActivity('other')"    style="flex:1 1 calc(33% - 8px)">✏️ Other</div>
         </div>
       </div>
@@ -365,6 +366,7 @@
             <div class="radio-item" id="edit-act-soothe"   onclick="setEditActivity('soothe')"   style="flex:1 1 calc(33% - 8px)">🤗 Soothe</div>
             <div class="radio-item" id="edit-act-medication" onclick="setEditActivity('medication')" style="flex:1 1 calc(33% - 8px)">💊 Meds</div>
             <div class="radio-item" id="edit-act-brushteeth" onclick="setEditActivity('brushteeth')" style="flex:1 1 calc(33% - 8px)">🪥 Teeth</div>
+            <div class="radio-item" id="edit-act-bath"     onclick="setEditActivity('bath')"     style="flex:1 1 calc(33% - 8px)">🛁 Bath</div>
             <div class="radio-item" id="edit-act-other"    onclick="setEditActivity('other')"    style="flex:1 1 calc(33% - 8px)">✏️ Other</div>
           </div>
         </div>
@@ -497,7 +499,7 @@
 
     function setActivity(sub) {
       activitySubtype = sub;
-      ['play', 'study', 'soothe', 'medication', 'brushteeth', 'other'].forEach(t =>
+      ['play', 'study', 'soothe', 'medication', 'brushteeth', 'bath', 'other'].forEach(t =>
         document.getElementById(`act-${t}`).classList.toggle('selected', t === sub)
       );
       document.getElementById('other-label-field').style.display = sub === 'other' ? 'block' : 'none';
@@ -661,7 +663,7 @@
       document.getElementById('stat-diaper-last').textContent   = lastDiaper ? agoStr(lastDiaper) : (diapers.length === 0 ? 'none today' : '');
 
       // Activity stats
-      const ACTIVITY_LABELS = { play: '🧸', study: '📚', soothe: '🤗', medication: '💊', brushteeth: '🪥', other: '✏️' };
+      const ACTIVITY_LABELS = { play: '🧸', study: '📚', soothe: '🤗', medication: '💊', brushteeth: '🪥', bath: '🛁', other: '✏️' };
       const activities  = data.filter(r => r.type.startsWith('activity_'));
       const lastActivity = activities[0]?.logged_at;
       const actCounts   = {};
@@ -741,7 +743,7 @@
       </div>`;
     }
 
-    const ACTIVITY_NAMES = { play: '🧸 Play', study: '📚 Study', soothe: '🤗 Soothe', medication: '💊 Medication', brushteeth: '🪥 Brush teeth', other: '✏️ Other' };
+    const ACTIVITY_NAMES = { play: '🧸 Play', study: '📚 Study', soothe: '🤗 Soothe', medication: '💊 Medication', brushteeth: '🪥 Brush teeth', bath: '🛁 Bath', other: '✏️ Other' };
     const TYPE_LABELS = {
       feed: '🍼 Feed', diaper_wet: '🚼 Wet', diaper_dirty: '🚼 Dirty', diaper_both: '🚼 Wet + Dirty',
     };
@@ -1143,7 +1145,7 @@
 
     function setEditActivity(sub) {
       editActivitySub = sub;
-      ['play', 'study', 'soothe', 'medication', 'brushteeth', 'other'].forEach(t =>
+      ['play', 'study', 'soothe', 'medication', 'brushteeth', 'bath', 'other'].forEach(t =>
         document.getElementById(`edit-act-${t}`).classList.toggle('selected', t === sub)
       );
     }
