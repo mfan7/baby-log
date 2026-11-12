@@ -245,6 +245,14 @@
           <div class="radio-item"          id="radio-both"  onclick="setDiaper('both')">Both</div>
         </div>
       </div>
+      <div class="field">
+        <label>Amount (optional)</label>
+        <div class="radio-row">
+          <div class="radio-item" id="size-small"  onclick="setDiaperSize('small')">Small</div>
+          <div class="radio-item" id="size-medium" onclick="setDiaperSize('medium')">Medium</div>
+          <div class="radio-item" id="size-large"  onclick="setDiaperSize('large')">Large</div>
+        </div>
+      </div>
     </div>
 
     <!-- Activity fields -->
@@ -355,6 +363,14 @@
             <div class="radio-item" id="edit-radio-both"  onclick="setEditDiaper('both')">Both</div>
           </div>
         </div>
+        <div class="field">
+          <label>Amount (optional)</label>
+          <div class="radio-row">
+            <div class="radio-item" id="edit-size-small"  onclick="setEditDiaperSize('small')">Small</div>
+            <div class="radio-item" id="edit-size-medium" onclick="setEditDiaperSize('medium')">Medium</div>
+            <div class="radio-item" id="edit-size-large"  onclick="setEditDiaperSize('large')">Large</div>
+          </div>
+        </div>
       </div>
 
       <div id="edit-activity-fields" class="hidden">
@@ -409,6 +425,7 @@
 
     let currentType     = 'feed';
     let diaperType      = 'wet';
+    let diaperSize      = null; // null | 'small' | 'medium' | 'large'
     let activitySubtype = 'play';
     let currentUser     = null;
     let logDate         = 0; // 0 = today, -1 = yesterday
@@ -521,6 +538,13 @@
       );
     }
 
+    function setDiaperSize(size) {
+      diaperSize = (diaperSize === size) ? null : size; // tap again to clear
+      ['small', 'medium', 'large'].forEach(s =>
+        document.getElementById(`size-${s}`).classList.toggle('selected', s === diaperSize)
+      );
+    }
+
     function toggleCheck(which) {
       const cb = document.getElementById(`cb-${which}`);
       cb.checked = !cb.checked;
@@ -572,6 +596,7 @@
         });
       } else if (currentType === 'diaper') {
         row.type = `diaper_${diaperType}`;
+        row.diaper_size = diaperSize; // null if not chosen
       } else {
         row.type = `activity_${activitySubtype}`;
         row.had_formula = false;
@@ -617,6 +642,7 @@
       document.getElementById('med-dose').value  = '';
       document.getElementById('med-other-field').style.display = 'none';
       setDiaper('wet');
+      setDiaperSize(null);
       setDefaultTime();
     }
 
@@ -691,6 +717,7 @@
       } else if (r.type.startsWith('diaper')) {
         const sub = r.type.replace('diaper_', '');
         detail = sub.charAt(0).toUpperCase() + sub.slice(1);
+        if (r.diaper_size) detail += ' · ' + r.diaper_size.charAt(0).toUpperCase() + r.diaper_size.slice(1);
       } else if (r.type.startsWith('activity_')) {
         const sub = r.type.replace('activity_', '');
         detail = (ACTIVITY_NAMES[sub] || sub).replace(/^.{2} /, ''); // strip emoji
@@ -1080,6 +1107,7 @@
 
     let editingId      = null;
     let editDiaper     = 'wet';
+    let editDiaperSize = null;
     let editType       = 'feed';
     let editActivitySub = 'play';
 
@@ -1115,6 +1143,7 @@
       if (baseType === 'diaper') {
         const sub = row.type.replace('diaper_', '');
         setEditDiaper(sub);
+        setEditDiaperSize(row.diaper_size || null);
       }
 
       // Pre-fill time
@@ -1157,6 +1186,13 @@
       );
     }
 
+    function setEditDiaperSize(size) {
+      editDiaperSize = (editDiaperSize === size) ? null : size;
+      ['small', 'medium', 'large'].forEach(s =>
+        document.getElementById(`edit-size-${s}`).classList.toggle('selected', s === editDiaperSize)
+      );
+    }
+
     function toggleEditCheck(which) {
       const cb = document.getElementById(`edit-cb-${which}`);
       cb.checked = !cb.checked;
@@ -1181,11 +1217,12 @@
           type: 'feed', had_formula: hadFormula, had_solid: hadSolid,
           amount_ml: hadFormula ? (parseInt(document.getElementById('edit-amount-ml').value) || null) : null,
           amount_g:  hadSolid   ? (parseInt(document.getElementById('edit-amount-g').value)  || null) : null,
+          diaper_size: null,
         });
       } else if (editType === 'diaper') {
-        Object.assign(updates, { type: `diaper_${editDiaper}`, had_formula: false, had_solid: false, amount_ml: null, amount_g: null });
+        Object.assign(updates, { type: `diaper_${editDiaper}`, had_formula: false, had_solid: false, amount_ml: null, amount_g: null, diaper_size: editDiaperSize });
       } else {
-        Object.assign(updates, { type: `activity_${editActivitySub}`, had_formula: false, had_solid: false, amount_ml: null, amount_g: null });
+        Object.assign(updates, { type: `activity_${editActivitySub}`, had_formula: false, had_solid: false, amount_ml: null, amount_g: null, diaper_size: null });
       }
 
       const { error } = await sb.from('care_logs').update(updates).eq('id', editingId);
